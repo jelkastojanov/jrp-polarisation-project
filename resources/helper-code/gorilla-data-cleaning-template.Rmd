@@ -4,6 +4,15 @@ author: "Jelka Stojanov"
 date: "20/01/2021"
 ---
 
+Variable naming conventions: 
+
+Use camel case when naming dataframe columns/objects etc.
+
+Camel case:
+
+If there is a single word in the name, use only lowercase letters (e.g., gender). 
+If there are multiple words in the name, capitalise each word except the first (e.g., groupMembership).
+
 Install & load packages
 
 ```{r}
@@ -31,108 +40,108 @@ Load files
 # If the file is in the same repository, this is enough, if not, you need to specify a full path to the data in the brackets.
 
 # Questionnaire data from Gorilla
-Demographics <- read_csv("Demographics.csv")
+demographics <- read_csv("Demographics.csv")
 
 # Task data from Gorilla
-Task_Vers1 <- read_csv("Task_Vers1.csv")
-Task_Vers2 <- read_csv("Task_Vers2.csv")
+taskVers1 <- read_csv("Task_Vers1.csv")
+taskVers2 <- read_csv("Task_Vers2.csv")
 ```
 
 Clean data - Questionnaires
 
 ```{r}
 # Keep only the rows you need
-Demographics_Clean <- Demographics %>% 
-  dplyr::filter(Demographics$`Event Index` == 1) # Remove rows that have 'END OF FILE' in them
+demographicsClean <- demographics %>% 
+  dplyr::filter(demographics$`Event Index` == 1) # Remove rows that have 'END OF FILE' in them
 
 # Check column names
-colnames(Demographics_Clean)
+colnames(demographicsClean)
 
 # Keep only columns you want [Rename accordingly]
-Demographics_Clean <- Demographics_Clean[, c('participantID', 'age', 'gender', 'education', 'employment', 'englishFirstLanguage')]
+demographicsClean <- demographicsClean[, c('participantID', 'age', 'gender', 'education', 'employment', 'englishFirstLanguage')]
 
 # Example: Clean englishFirstLanguage responses 
 
 # All participants except one said 'Yes' to the question "Is English your first language?". Recode "Yes" responses to "English", add "German" for the participant who responded "No" and rename variable to firstLanguage instead. 
 
 # Check unique values in a column
-unique(Demographics_Clean$englishFirstLanguage) 
+unique(demographicsClean$englishFirstLanguage) 
 
-Demographics_Clean$englishFirstLanguage <- if_else(Demographics_Clean$englishFirstLanguage == "No (Please specify your first language)", 'German', 'English')
+demographicsClean$englishFirstLanguage <- if_else(demographicsClean$englishFirstLanguage == "No (Please specify your first language)", 'German', 'English')
 
 # Rename a column
-names(Demographics_Clean)[6] <- 'firstLanguage'
+names(demographicsClean)[6] <- 'firstLanguage'
 ```
 
 Calculate & visualise descriptive stats
 
 ```{r}
 # Gender - 6 men, 14 women
-Demographics_Clean %>% 
+demographicsClean %>% 
   ggplot(aes(gender)) +
   geom_bar(stat = 'count') + 
   stat_count(geom = "text", colour = "white", size = 3.5,
              aes(label = ..count..),position = position_stack(vjust=0.5))
 
-table(Demographics_Clean$gender)
+table(demographicsClean$gender)
 
 # Age - Mean = 24.15; Median = 19
-Demographics_Clean %>% 
+demographicsClean %>% 
   ggplot(aes(age)) +
   geom_density() +
-  geom_vline(xintercept = mean(Demographics_Clean$age)) +
-  geom_vline(xintercept = median(Demographics_Clean$age), linetype = 'dashed')
+  geom_vline(xintercept = mean(demographicsClean$age)) +
+  geom_vline(xintercept = median(demographicsClean$age), linetype = 'dashed')
 
-mean(Demographics_Clean$age) # If there are missing data, you need to add na.rm = TRUE in the brackets.
-sd(Demographics_Clean$age)
-median(Demographics_Clean$age)
-mad(Demographics_Clean$age)
+mean(demographicsClean$age) # If there are missing data, you need to add na.rm = TRUE in the brackets.
+sd(demographicsClean$age)
+median(demographicsClean$age)
+mad(demographicsClean$age)
 ```
 
 Clean data - Tasks
 
 ```{r}
 # Merge multiple files
-Task <- bind_rows(Task_Vers1, Task_Vers2)
+task <- bind_rows(taskVers1, taskVers2)
 
 # Keep only columns you want [Rename accordingly]
-Task <- Task[, c('participantID', 'trialNumber', 'Screen.Name', 'Zone.Name', 'Zone.Type', 'Reaction.Time', 'Response', 'display', 'Text')]
+task <- task[, c('participantID', 'trialNumber', 'Screen.Name', 'Zone.Name', 'Zone.Type', 'Reaction.Time', 'Response', 'display', 'text')]
 
-View(taskAllVersions) # This is how you open a file in a separate window
+View(task) # This is how you open a file in a separate window
 
 # Filter certain values of Zone.Name [Change accordingly]
-Task <- Task %>% 
+task <- task %>% 
   dplyr::filter(Zone.Name %in% c('EP', 'Empathy'))
 
-class(Task$Zone.Name) # This is how you check whether your variable is numeric/character etc.
+class(task$Zone.Name) # This is how you check whether your variable is numeric/character etc.
 
 # Filter certain values of Zone.Type [Change accordingly]
-Task <- Task %>% 
+task <- task %>% 
   dplyr::filter(Zone.Type %in% c('response_slider_endValue', 'response_text_entry'))
 
 # Filter certain values of display [Change accordingly]
-Task <- Task %>% filter(display %in% c('Task', 'AttentionCheck1', 'AttentionCheck2', 'AttentionCheck3'))
+task <- task %>% filter(display %in% c('task', 'AttentionCheck1', 'AttentionCheck2', 'AttentionCheck3'))
 
 # This is how you delete a column
-Task_No6 <- Task[, -6]
+taskExample <- task[, -6]
 
 # Function dcast splits a single column (Response) into multiple columns based on another column (Zone.Name in this case, which has values 'EP' or 'Empathy'). For example, we start from two columns - Zone.Name (levels: EP, Empathy) and Response (numerical values) - and end up with two columns - EP and Empathy - with numerical values instead.
-Task_Final <- dcast(setDT(Task), participantID + trialNumber + display + Text ~ Zone.Name,
+taskFinal <- dcast(setDT(task), participantID + trialNumber + display + text ~ Zone.Name,
                         value.var = 'Response')
 
 # Order your dataset from the smallest to the highest number (if the variable is numeric) or alphabetically (if the variable is character)
-Task_Final <- Task_Final %>%
+taskFinal <- taskFinal %>%
   arrange(participantID, trialNumber, display)
 
 # Are there missing values? (is.na() checks if each individual value is missing and sum() gives you a total number of missing values)
-sum(is.na(Task_Final$EP))
+sum(is.na(taskFinal$EP))
 
 # Convert a variable to numeric
-Task_Final$EP <- as.numeric(Task_Final$EP)
+taskFinal$EP <- as.numeric(taskFinal$EP)
 
 # Getting descriptive statistics for each stimulus (Text)
-Descriptives <- Task_Final %>% 
-  dplyr::group_by(Text) %>%
+descriptives <- taskFinal %>% 
+  dplyr::group_by(text) %>%
   dplyr::summarise(meanEP = mean(EP), 
                    medianEP = median(EP), 
                    sdEP = sd(EP), 
@@ -143,17 +152,17 @@ Descriptives <- Task_Final %>%
                    madEMP = mad(Empathy))
 
 # This is how you export a .csv file
-write.csv(Descriptives, 'Descriptives_Pilot1.csv')
+write.csv(descriptives, 'Descriptives_Pilot1.csv')
 ```
 
 Merge demographics & task data
 
 ```{r}
-Task_Final_Demographics <- left_join(Task_Final, Demographics_Clean, by = 'participantID') 
+taskDemographics <- left_join(taskFinal, demographicsClean, by = 'participantID') 
 
 # Check gender differences
-Task_Final_Demographics %>%
-  dplyr::group_by(gender, Text) %>% # If you use the group_by function, you will get different descriptives for each level of the variable.
+taskDemographics %>%
+  dplyr::group_by(gender, text) %>% # If you use the group_by function, you will get different descriptives for each level of the variable.
   dplyr::summarise(meanEP = mean(EP), 
                    medianEP = median(EP), 
                    sdEP = sd(EP), 
