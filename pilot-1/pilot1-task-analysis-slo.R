@@ -8,15 +8,17 @@ taskVers7 <- read.csv("task7.csv")
 taskVers8 <- read.csv("task8.csv")
 
 #lets bind
+library(dplyr)
 task <- bind_rows(taskVers1, taskVers2, taskVers3, taskVers4, taskVers5, taskVers6, taskVers7, taskVers8)
 
 task <- task[, c('Participant.Private.ID', "Trial.Number", "Screen.Number", 'Zone.Name', "Zone.Type",'randomiser.ltur', 'Response')]
 task <- task %>% 
-  dplyr::filter(Zone.Name %in% c('selfOpinion', 'liberalOpinion', "conservativeOpinion"))
+  dplyr::filter(Zone.Name %in% c('selfOpinion', 'liberalOpinion', "conservativeOpinion", "socialViews", "economiclViews")))
 
 task <- task %>% 
   dplyr::filter(Zone.Type %in% c('response_slider_endValue'))
 
+library(maditr)
 taskFinal <- dcast(setDT(task),  Trial.Number+ Zone.Name  ~ Participant.Private.ID ,
                    value.var = 'Response')
 
@@ -36,14 +38,35 @@ names(a) <- as.list(pf)
 
 #erase the 1st 2 rows
 a<-a[-c(1,2),]
-mean(a$conservativeOpinion1)
 
-#transform into nueric
+#transform into numeric
 a$conservativeOpinion1 <- as.numeric(a$conservativeOpinion1)
 
 data_task<-as.data.frame(apply(a , 2, as.numeric))
 
 data_task$ID<- ID
 data_task
+
+
+#how much right-wing participants do we have?
+length(data_task$economiclViews1[data_task$economiclViews1>=50])
+length(data_task$economiclViews1[data_task$socialViews1>=50])
+
+#a measure of political preference
+data_task$politicalView<- data_task$economiclViews1 + data_task$socialViews1
+
+#lets categorise liberal vs. conservative
+data_task$liberals <- ifelse(data_task$politicalView<100, 1, 0)
+table(data_task$liberals)
+
+# means for liberals
+round(apply(data_task[data_task$liberals==1], 2, mean),2)
+
+# means for conservatives
+round(apply(data_task[data_task$liberals==0], 2, mean),2)
+
+#diff: look for biggest difference in selfOpinions
+difference.means<-as.data.frame(round(apply(data_task[data_task$liberals==1], 2, mean),2)-round(apply(data_task[data_task$liberals==0], 2, mean),2))
+diffrence.means
 
 
