@@ -1,4 +1,6 @@
 # Pilot 1 files to ignore
+.RProj.user 
+
 pilot-1/data
 
 pilot-1/pilot-1-R-data.RData
