@@ -1,0 +1,131 @@
+---
+title: "JRP Pilot 1 (UK data)"
+author: "Jelka Stojanov"
+date: "10/02/2022"
+output: html_document
+---
+
+Load packages
+
+```{r}
+library(interactions)
+library(afex)
+library(tidyverse) 
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(lme4) 
+library(lmerTest)
+library(readr)
+library(maditr)
+library(patchwork)
+library(janitor)
+library(openxlsx)
+library(Routliers)
+library(lsmeans)
+library(Hmisc)
+library(car)
+library(MPsychoR)
+library(eigenmodel)
+library(rmcorr)
+
+options(scipen = 999) # Remove scientific notation
+`%notin%` <- Negate(`%in%`) # Define %notin% function
+```
+
+Load data (all .xlsx files)
+
+```{r}
+# Specify the path accordingly
+xlsx_files <- list.files(path='pilot-1/data', pattern="*.xlsx", full.names=TRUE)
+
+# Specify names of the dataframes 
+names_xlsx <- sub('.*\\/', '', xlsx_files)
+names_xlsx <- substr(names_xlsx, 1, nchar(names_xlsx) - 5)
+
+# List all files
+all_xlsx <- lapply(xlsx_files, read_excel)
+
+# Name all files
+names(all_xlsx) <- names_xlsx
+
+# Save each element in the list into a separate R object
+list2env(all_xlsx, envir=.GlobalEnv)
+```
+
+Data cleaning
+
+```{r}
+# Rename dataframes
+additionalGoals <- `pilot-1-additional-goals`
+consent <- `pilot-1-consent`
+demographics <- `pilot-1-demographics`
+experimentDetails <- `pilot-1-experiment-details`
+politicalIdeology <- `pilot-1-political-ideology`
+politicalParty <- `pilot-1-political-party`
+taskConLibSelf <- `pilot-1-task-con-lib-self`
+taskConSelfLib <- `pilot-1-task-con-self-lib`
+taskLibConSelf <- `pilot-1-task-lib-con-self`
+taskLibSelfCon <- `pilot-1-task-lib-self-con`
+taskSelfConLib <- `pilot-1-task-self-con-lib`
+taskSelfLibCon <- `pilot-1-task-self-lib-con`
+technicalDifficulties <- `pilot-1-technical-difficulties`
+
+# Clean task data
+taskCombined <- bind_rows(taskConLibSelf, taskConSelfLib, taskLibConSelf, taskLibSelfCon, taskSelfConLib, taskSelfLibCon)
+
+taskCombined <- taskCombined[, c('participantID', 'taskRandomiser', 'Trial Number', 'Zone Name', 'Zone Type', 'Reaction Time', 'Response', 'display', 'sliderText')]
+
+# Rename columns to manipulate them easier
+names(taskCombined)[3] <- 'trialNumber'
+names(taskCombined)[4] <- 'zoneName'
+names(taskCombined)[5] <- 'zoneType'
+names(taskCombined)[6] <- 'reactionTime'
+names(taskCombined)[7] <- 'response'
+
+taskCombined <- taskCombined %>%
+  dplyr::filter(display != 'instructions' & zoneType == 'response_slider_endValue')
+
+# Cleaned task data
+taskFinal <- taskCombined[, c('participantID', 'taskRandomiser', 'trialNumber', 'zoneName', 'reactionTime', 'response', 'sliderText')]
+
+names(taskFinal)[4] <- 'perspective'
+names(taskFinal)[7] <- 'policyGoal'
+
+# Clean political ideology
+politicalIdeologyFinal <- politicalIdeology %>%
+  dplyr::filter(politicalIdeology$`Zone Type` == 'response_slider_endValue')
+
+politicalIdeologyFinal <- politicalIdeologyFinal[, c('participantID', 'Zone Name', 'Response')]
+
+# Cleaned political ideology
+politicalIdeologyFinal <- dcast(politicalIdeologyFinal,
+                                participantID ~ `Zone Name`,
+                                value.var = 'Response')
+
+# Combine all datasets
+pilot1Data <- left_join(demographics, taskFinal, by = c('participantID', 'taskRandomiser'))
+pilot1Data <- left_join(pilot1Data, additionalGoals, by = "participantID")
+pilot1Data <- left_join(pilot1Data, politicalParty, by = "participantID")
+pilot1Data <- left_join(pilot1Data, politicalIdeologyFinal, by = "participantID")
+pilot1Data <- left_join(pilot1Data, technicalDifficulties, by = "participantID")
+
+# Export data into a .csv file
+write.csv(pilot1Data, 'pilot1Data.csv')
+```
+
+Data analysis
+
+Steps:
+
+1. Operationalise political affiliation
+  1a. Average economic and social views
+  1b. Use the approach from Zmigrod et al. (2018)
+  
+2. Calculate actual disagreement between conservative and liberal participants 
+3. Calculate perceived disagreement between conservative and liberal participants (difference scores within each participant)
+
+```{r}
+
+```
+
