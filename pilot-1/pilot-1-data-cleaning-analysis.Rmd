@@ -114,11 +114,11 @@ pilot1Data <- left_join(pilot1Data, technicalDifficulties, by = "participantID")
 write.csv(pilot1Data, 'pilot1Data.csv')
 ```
 
-########
+#########
 
 DATA ANALYSIS
 
-#######
+########
 
 TASK 1: All 7 of us should go through the policy goals included in Pilot 1 (SLO/UK) and categorise them as economic/social in different pages of the Excel sheet.
 
