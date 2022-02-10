@@ -114,18 +114,76 @@ pilot1Data <- left_join(pilot1Data, technicalDifficulties, by = "participantID")
 write.csv(pilot1Data, 'pilot1Data.csv')
 ```
 
-Data analysis
+########
 
-Steps:
+DATA ANALYSIS
 
-1. Operationalise political affiliation
-  1a. Average economic and social views
-  1b. Use the approach from Zmigrod et al. (2018)
+#######
+
+TASK 1: All 7 of us should go through the policy goals included in Pilot 1 (SLO/UK) and categorise them as economic/social in different pages of the Excel sheet.
+
+
+TASK 2 (Analysis steps):
+
+1. Categorise people based on political affiliation
+  1a. Average economic and social views and classify those over 50 as conservative, those below 50 as liberal
+  1b. Use economic and social views separately for economic and social goals (Same classification logic)
+  1c. Use the approach from Zmigrod et al. (2018) - Scores for each political party can be found in the Supplementary materials. Some political parties might not have scores so look for alternative YouGov data.
   
-2. Calculate actual disagreement between conservative and liberal participants 
-3. Calculate perceived disagreement between conservative and liberal participants (difference scores within each participant)
+2. Calculate actual disagreement between conservative and liberal participants - For this part, exclude strict moderates (those who scored 50).
+3. Calculate perceived disagreement between conservative and liberal participants (first calculate the difference scores within each participant and then average them) - Strict moderates should be included at first, but when we are doing the comparison between liberal and conservative samples, they should be exluded again (since they don't strictly fall into any of the political categories).
 
 ```{r}
+cor.test(politicalIdeologyFinal$economiclViews, politicalIdeologyFinal$socialViews) # How correlated are economic and social views?
 
+# Approach 1a
+politicalIdeologyFinal$averageIdeology <- (politicalIdeologyFinal$economiclViews + politicalIdeologyFinal$socialViews) / 2
+
+# Create a histogram
+politicalIdeologyFinal %>%
+  ggplot(aes(x = averageIdeology)) +
+  geom_histogram()
+
+# How many people scored 50 on different political ideology variables?
+politicalIdeologyFinal %>%
+  dplyr::filter(averageIdeology == 50)
+
+politicalIdeologyFinal %>%
+  dplyr::filter(economiclViews == 50)
+
+politicalIdeologyFinal %>%
+  dplyr::filter(socialViews == 50)
+
+# Classification based on average scores
+politicalIdeologyFinal$politicalAffiliationGroup <- 
+  if_else(politicalIdeologyFinal$averageIdeology > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$averageIdeology < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$politicalAffiliationGroup)
+
+# Classification based on economic views
+politicalIdeologyFinal$economicGroup <- 
+  if_else(politicalIdeologyFinal$economiclViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$economiclViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$economicGroup)
+
+# Classification based on social views
+politicalIdeologyFinal$socialGroup <- 
+  if_else(politicalIdeologyFinal$socialViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$socialViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$socialGroup)
+
+# Summary stats that you care about the most
+# You can save grouped summary stats into an object and export it using write.csv() function
+X <- pilot1Data %>% # Remember that you don't currently have political affiliation columns in this dataset (pilot1Data)!
+  dlyr::filter(politicalAffiliationGroup != 'Moderate') %>%
+  dplyr::group_by(policyGoal, perspective) %>% # Group by politicalAffiliationGroup later as well
+  summarise(meanApproval = mean(response), medianApproval = median(response), sdApproval = sd(response), madApproval = mad(response))
+
+# Specify the score for each party - Approach 1c
+pilot1Data$politicalPartyScore <- 
+  if_else(pilot1Data$politicalParty == 'Labour', 3.2, 999) # Add other political parties here
 ```
 
