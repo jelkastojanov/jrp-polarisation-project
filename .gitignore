@@ -1,2 +1,6 @@
-# Add the names of files that shouldn't be uploaded to the repository
-.Rproj.user
+# Pilot 1 files to ignore
+pilot-1/data
+
+pilot-1/pilot-1-R-data.RData
+
+pilot-1/pilot1Data.csv
