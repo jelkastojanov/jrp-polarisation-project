@@ -1,0 +1,190 @@
+---
+  title: "JRP Pilot 1 (UK data)"
+author: "Jelka Stojanov"
+date: "10/02/2022"
+output: html_document
+---
+  
+  Load packages
+
+```{r}
+library(interactions)
+library(afex)
+library(tidyverse) 
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(lme4) 
+library(lmerTest)
+library(readr)
+library(maditr)
+library(patchwork)
+library(janitor)
+library(openxlsx)
+library(Routliers)
+library(lsmeans)
+library(Hmisc)
+library(car)
+library(MPsychoR)
+library(eigenmodel)
+library(rmcorr)
+
+options(scipen = 999) # Remove scientific notation
+`%notin%` <- Negate(`%in%`) # Define %notin% function
+```
+
+Load data (all .xlsx files)
+
+```{r}
+# Specify the path accordingly
+xlsx_files <- list.files(path='pilot-1/data', pattern="*.xlsx", full.names=TRUE)
+
+# Specify names of the dataframes 
+names_xlsx <- sub('.*\\/', '', xlsx_files)
+names_xlsx <- substr(names_xlsx, 1, nchar(names_xlsx) - 5)
+
+# List all files
+all_xlsx <- lapply(xlsx_files, read_excel)
+
+# Name all files
+names(all_xlsx) <- names_xlsx
+
+# Save each element in the list into a separate R object
+list2env(all_xlsx, envir=.GlobalEnv)
+```
+
+Data cleaning
+
+```{r}
+# Rename dataframes
+additionalGoals <- `pilot-1-additional-goals`
+consent <- `pilot-1-consent`
+demographics <- `pilot-1-demographics`
+experimentDetails <- `pilot-1-experiment-details`
+politicalIdeology <- `pilot-1-political-ideology`
+politicalParty <- `pilot-1-political-party`
+taskConLibSelf <- `pilot-1-task-con-lib-self`
+taskConSelfLib <- `pilot-1-task-con-self-lib`
+taskLibConSelf <- `pilot-1-task-lib-con-self`
+taskLibSelfCon <- `pilot-1-task-lib-self-con`
+taskSelfConLib <- `pilot-1-task-self-con-lib`
+taskSelfLibCon <- `pilot-1-task-self-lib-con`
+technicalDifficulties <- `pilot-1-technical-difficulties`
+
+# Clean task data
+taskCombined <- bind_rows(taskConLibSelf, taskConSelfLib, taskLibConSelf, taskLibSelfCon, taskSelfConLib, taskSelfLibCon)
+
+taskCombined <- taskCombined[, c('participantID', 'taskRandomiser', 'Trial Number', 'Zone Name', 'Zone Type', 'Reaction Time', 'Response', 'display', 'sliderText')]
+
+# Rename columns to manipulate them easier
+names(taskCombined)[3] <- 'trialNumber'
+names(taskCombined)[4] <- 'zoneName'
+names(taskCombined)[5] <- 'zoneType'
+names(taskCombined)[6] <- 'reactionTime'
+names(taskCombined)[7] <- 'response'
+
+taskCombined <- taskCombined %>%
+  dplyr::filter(display != 'instructions' & zoneType == 'response_slider_endValue')
+
+# Cleaned task data
+taskFinal <- taskCombined[, c('participantID', 'taskRandomiser', 'trialNumber', 'zoneName', 'reactionTime', 'response', 'sliderText')]
+
+names(taskFinal)[4] <- 'perspective'
+names(taskFinal)[7] <- 'policyGoal'
+
+# Clean political ideology
+politicalIdeologyFinal <- politicalIdeology %>%
+  dplyr::filter(politicalIdeology$`Zone Type` == 'response_slider_endValue')
+
+politicalIdeologyFinal <- politicalIdeologyFinal[, c('participantID', 'Zone Name', 'Response')]
+
+# Cleaned political ideology
+politicalIdeologyFinal <- dcast(politicalIdeologyFinal,
+                                participantID ~ `Zone Name`,
+                                value.var = 'Response')
+
+# Combine all datasets
+pilot1Data <- left_join(demographics, taskFinal, by = c('participantID', 'taskRandomiser'))
+pilot1Data <- left_join(pilot1Data, additionalGoals, by = "participantID")
+pilot1Data <- left_join(pilot1Data, politicalParty, by = "participantID")
+pilot1Data <- left_join(pilot1Data, politicalIdeologyFinal, by = "participantID")
+pilot1Data <- left_join(pilot1Data, technicalDifficulties, by = "participantID")
+
+# Export data into a .csv file
+write.csv(pilot1Data, 'pilot1Data.csv')
+```
+
+#########
+
+DATA ANALYSIS
+
+########
+
+TASK 1: All 7 of us should go through the policy goals included in Pilot 1 (SLO/UK) and categorise them as economic/social in different pages of the Excel sheet.
+
+
+TASK 2 (Analysis steps):
+  
+  1. Categorise people based on political affiliation
+1a. Average economic and social views and classify those over 50 as conservative, those below 50 as liberal
+1b. Use economic and social views separately for economic and social goals (Same classification logic)
+1c. Use the approach from Zmigrod et al. (2018) - Scores for each political party can be found in the Supplementary materials. Some political parties might not have scores so look for alternative YouGov data.
+
+2. Calculate actual disagreement between conservative and liberal participants - For this part, exclude strict moderates (those who scored 50).
+3. Calculate perceived disagreement between conservative and liberal participants (first calculate the difference scores within each participant and then average them) - Strict moderates should be included at first, but when we are doing the comparison between liberal and conservative samples, they should be exluded again (since they don't strictly fall into any of the political categories).
+
+```{r}
+cor.test(politicalIdeologyFinal$economiclViews, politicalIdeologyFinal$socialViews) # How correlated are economic and social views?
+
+# Approach 1a
+politicalIdeologyFinal$averageIdeology <- (politicalIdeologyFinal$economiclViews + politicalIdeologyFinal$socialViews) / 2
+
+# Create a histogram
+politicalIdeologyFinal %>%
+  ggplot(aes(x = averageIdeology)) +
+  geom_histogram()
+
+# How many people scored 50 on different political ideology variables?
+politicalIdeologyFinal %>%
+  dplyr::filter(averageIdeology == 50)
+
+politicalIdeologyFinal %>%
+  dplyr::filter(economiclViews == 50)
+
+politicalIdeologyFinal %>%
+  dplyr::filter(socialViews == 50)
+
+# Classification based on average scores
+politicalIdeologyFinal$politicalAffiliationGroup <- 
+  if_else(politicalIdeologyFinal$averageIdeology > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$averageIdeology < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$politicalAffiliationGroup)
+
+# Classification based on economic views
+politicalIdeologyFinal$economicGroup <- 
+  if_else(politicalIdeologyFinal$economiclViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$economiclViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$economicGroup)
+
+# Classification based on social views
+politicalIdeologyFinal$socialGroup <- 
+  if_else(politicalIdeologyFinal$socialViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinal$socialViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinal$socialGroup)
+
+# Summary stats that you care about the most
+# You can save grouped summary stats into an object and export it using write.csv() function
+X <- pilot1Data %>% # Remember that you don't currently have political affiliation columns in this dataset (pilot1Data)!
+                                                                                                                                                                                                                                                                                                                                       dlyr::filter(politicalAffiliationGroup != 'Moderate') %>%
+                                                                                                                                                                                                                                                                                                                                       dplyr::group_by(policyGoal, perspective) %>% # Group by politicalAffiliationGroup later as well
+                                                                                                                                                                                                                                                                                                                                       summarise(meanApproval = mean(response), medianApproval = median(response), sdApproval = sd(response), madApproval = mad(response))
+                                                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                                     # Specify the score for each party - Approach 1c
+                                                                                                                                                                                                                                                                                                                                     pilot1Data$politicalPartyScore <- 
+                                                                                                                                                                                                                                                                                                                                       if_else(pilot1Data$politicalParty == 'Labour', 3.2, 999) # Add other political parties here
+                                                                                                                                                                                                                                                                                                                                     ```
+                                                                                                                                                                                                                                                                                                                                     
+                                                                                                                                                                                                                                                                                                                                     
