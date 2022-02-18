@@ -1,0 +1,348 @@
+---
+title: "pilot-1-data-cleaning-analysis-ALI"
+author: "Ali Hajian"
+date: "2/14/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(xlsxjars)
+library(rJava)
+library(maditr)
+library(ggplot2)
+library(dplyr)
+library(xlsx)
+library(miscTools)
+
+options(scipen = 999)
+`%notin%` <- Negate(`%in%`)
+```
+
+### Cleaning the tasks
+```{r}
+task1 <- read.xlsx("Political issues_Pilot 1_UK con-lib-self.xlsx", 1)
+task2 <- read.xlsx("Political issues_Pilot 1_UK con-self-lib.xlsx", 1)
+task3 <- read.xlsx("Political issues_Pilot 1_UK lib-con-self.xlsx", 1)
+task4 <- read.xlsx("Political issues_Pilot 1_UK lib-self-con.xlsx", 1)
+task5 <- read.xlsx("Political issues_Pilot 1_UK self-con-lib.xlsx", 1)
+task6 <- read.xlsx("Political issues_Pilot 1_UK self-lib-con.xlsx", 1)
+
+tasks <- bind_rows(task1, task2, task3, task4, task5, task6)
+
+tasksClean <- tasks %>% dplyr::filter(tasks$'Zone.Type' == "response_slider_endValue")
+tasksClean <- tasksClean[,c('Participant.Private.ID', 'randomiser.k5qe', 'Zone.Name', 'Response','sliderText', 'Spreadsheet.Row')]
+
+tasksFinal <- dcast(setDT(tasksClean), Participant.Private.ID ~ Zone.Name + Spreadsheet.Row, value.var = "Response")
+
+tasksFinal <- arrange(tasksFinal, Participant.Private.ID)
+```
+
+
+### Cleaning demographics
+```{r}
+demographics <- read.xlsx('Demographics.xlsx', 1)
+
+demographicsClean <- demographics %>% dplyr::filter(demographics$'Event.Index' == 1)
+
+demographicsClean <- demographicsClean[, c( 'Participant.Private.ID', 'age', 'gender', 'gender.quantised', 'education', 'employment', 'employment.text', 'UKnationality', 'firstLanguage', 'firstLanguage.text', 'SES')]
+
+demographicsClean$gender <- if_else(is.na(demographicsClean$gender.quantised), "Non-binary", demographicsClean$gender)
+
+demographicsClean$firstLanguage <- if_else(demographicsClean$firstLanguage == "Yes", 'English', demographicsClean$firstLanguage.text)
+
+demographicsClean$employment <- if_else(demographicsClean$employment == "Other (Please specify)", demographicsClean$employment.text,  demographicsClean$employment)
+
+demographicsClean <- demographicsClean[, -(grep('gender.quantised', colnames(demographicsClean)))]
+demographicsClean <- demographicsClean[, -(grep('firstLanguage.text', colnames(demographicsClean)))]
+demographicsClean <- demographicsClean[, -(grep('employment.text', colnames(demographicsClean)))]
+
+demographicsClean <- arrange(demographicsClean, Participant.Private.ID)
+```
+
+
+### Cleaning Political Party Support
+```{r}
+politicalPartySupport <- read.xlsx('Political Party Support.xlsx', 1)
+
+politicalPartySupportClean <- politicalPartySupport %>% dplyr::filter(politicalPartySupport$'Event.Index' == 1)
+
+politicalPartySupportClean <- politicalPartySupportClean[, c('Participant.Private.ID', 'politicalParty', 'politicalParty.text')]
+
+politicalPartySupportClean$politicalParty <- if_else(is.na(politicalPartySupportClean$politicalParty.text), politicalPartySupportClean$politicalParty, politicalPartySupportClean$politicalParty.text)
+
+politicalPartySupportClean <- politicalPartySupportClean[, -(grep('politicalParty.text', colnames(politicalPartySupportClean)))]
+
+politicalPartySupportClean <- arrange(politicalPartySupportClean, Participant.Private.ID)
+```
+
+
+### Cleaning Political Ideology (social/economic views)
+```{r}
+politicalIdeology <- read.xlsx('Political Ideology_Pilot 1_UK.xlsx', 1)
+
+politicalIdeologyClean <- politicalIdeology %>% dplyr::filter(
+  politicalIdeology$Zone.Type == 'response_slider_endValue')
+
+politicalIdeologyClean <- politicalIdeologyClean[, c('Participant.Private.ID', 'Zone.Name', 'Response')]
+
+politicalIdeologyClean <- dcast(setDT(politicalIdeologyClean), Participant.Private.ID  ~ Zone.Name, value.var = "Response")
+
+politicalIdeologyClean <- arrange(politicalIdeologyClean, Participant.Private.ID)
+
+politicalIdeologyClean <- politicalIdeologyClean %>% rename(economicalViews = economiclViews)
+
+politicalIdeologyClean <- as.data.frame(politicalIdeologyClean)
+```
+
+
+### Merging everything into a single data table
+```{r}
+cleanData <- merge(tasksFinal, politicalPartySupportClean[,c("Participant.Private.ID", setdiff(colnames(politicalPartySupportClean), colnames(tasksFinal)))],by="Participant.Private.ID")
+
+cleanData <- merge(cleanData,politicalIdeologyClean[,c("Participant.Private.ID", setdiff(colnames(politicalIdeologyClean), colnames(cleanData)))],by = "Participant.Private.ID")
+
+cleanData <- merge(cleanData,demographicsClean[,c("Participant.Private.ID", setdiff(colnames(demographicsClean), colnames(cleanData)))],by="Participant.Private.ID")
+```
+
+
+### Categorizing people (first approach)
+```{r}
+cleanData$averageViews <- (cleanData$economicalViews + cleanData$socialViews) / 2
+
+cleanData$politicalLeaning <- if_else(cleanData$averageViews > 50, 'Conservative', if_else(cleanData$averageViews < 50, 'Liberal', 'Moderate'))
+```
+
+
+### Calculating actual differences (Liberal and Conservative), and SD (first approach)
+```{r}
+onlyLiberals <- cleanData %>% dplyr::filter(cleanData$politicalLeaning == 'Liberal')
+
+onlyLiberals <- as.data.table(onlyLiberals)
+
+actualLiberalMeans <- vector(mode = 'list')
+actualLiberalSDs <- vector(mode = 'list')
+
+for (policyGoalNumber in 1:51)
+{
+  selfOpinion <- paste('selfOpinion',policyGoalNumber + 1, sep = '_')
+  actualLiberalMeans[policyGoalNumber] <- colMeans(onlyLiberals[,..selfOpinion])
+  actualLiberalSDs[policyGoalNumber] <- colSds(onlyLiberals[,..selfOpinion])
+}
+
+onlyConservatives <- cleanData %>% dplyr::filter(cleanData$politicalLeaning == 'Conservative')
+
+onlyConservatives <- as.data.table(onlyConservatives)
+
+actualConservativeMeans <- vector(mode = 'list')
+actualConservativeSDs <- vector(mode = 'list')
+
+for (policyGoalNumber in 1:51)
+{
+  selfOpinion <- paste('selfOpinion',policyGoalNumber + 1, sep = '_')
+  actualConservativeMeans[policyGoalNumber] <- colMeans(onlyConservatives[,..selfOpinion])
+  actualConservativeSDs[policyGoalNumber] <- colSds(onlyConservatives[,..selfOpinion])
+}
+
+tasksClean <- arrange(tasksClean, Spreadsheet.Row)
+
+actualMeansAndSDs <- data.table(actualConservativeMeans, actualLiberalMeans, actualConservativeSDs, actualLiberalSDs, unique(tasksClean$sliderText))
+
+actualMeansAndSDs <- actualMeansAndSDs %>% rename(policyGoal = V5)
+
+for (i in 1:51)
+{
+  actualMeansAndSDs$actualDifference[i] <-     abs(as.numeric(actualMeansAndSDs$actualConservativeMeans[i]) - as.numeric(actualMeansAndSDs$actualLiberalMeans[i]))
+}
+
+actualMeansAndSDs <- arrange(actualMeansAndSDs, -actualDifference)
+```
+
+### Categorizing people and items (second approach)
+```{r}
+cleanData$economicLeaning <- if_else(cleanData$economicalViews > 50, 'Conservative', if_else(cleanData$economicalViews < 50, 'Liberal', 'Moderate'))
+
+cleanData$socialLeaning <- if_else(cleanData$socialViews > 50, 'Conservative', if_else(cleanData$socialViews < 50, 'Liberal', 'Moderate'))
+
+economicSocialGoals <- read.xlsx('Economic-Social Policy Goals.xlsx', 1)
+economicSocialGoals <- economicSocialGoals[1:51,'Majority']
+
+cleanDataSecondApproach <- as.matrix(cleanData)
+dummyMatrix <- matrix(ncol = ncol(cleanDataSecondApproach), nrow = 1)
+colnames(dummyMatrix) <- colnames(cleanDataSecondApproach)
+cleanDataSecondApproach <- rbind(cleanDataSecondApproach, dummyMatrix)
+
+for (y in 1:51) {
+  selfOpinion <- paste('selfOpinion',y + 1, sep = '_')
+  cleanDataSecondApproach[42,selfOpinion] <- economicSocialGoals[y]
+}
+cleanDataSecondApproach <- as.data.frame(cleanDataSecondApproach)
+
+cleanDataSecondApproachTransposed <- data.frame(t(cleanDataSecondApproach))
+
+socialPolicyGoals <- cleanDataSecondApproachTransposed %>% dplyr::filter(X42 == 'Social')
+
+economicPolicyGoals <- cleanDataSecondApproachTransposed %>% dplyr::filter(X42 == 'Economic')
+
+socialPolicyGoals <- data.frame(t(socialPolicyGoals))
+economicPolicyGoals <- data.frame(t(economicPolicyGoals))
+```
+
+### Calculating actual differences and SD (second approach) both economic and social
+```{r}
+# SOCIAL LIBERALS
+
+onlySocialLiberals <- cleanData %>% dplyr::filter(cleanData$socialLeaning == 'Liberal')
+
+onlySocialLiberals <- as.data.table(onlySocialLiberals)
+
+actualSocialLiberalMeans <- vector(mode = 'list')
+actualSocialLiberalSDs <- vector(mode = 'list')
+
+socialPolicyGoalsItems <- c(colnames(socialPolicyGoals))
+
+for (policyGoalNumber in socialPolicyGoalsItems)
+{
+  actualSocialLiberalMeans[policyGoalNumber] <- colMeans(onlySocialLiberals[,..policyGoalNumber])
+  actualSocialLiberalSDs[policyGoalNumber] <- colSds(onlySocialLiberals[,..policyGoalNumber])
+}
+
+# SOCIAL CONSERVATIVES
+
+onlySocialConservatives <- cleanData %>% dplyr::filter(cleanData$socialLeaning == 'Conservative')
+
+onlySocialConservatives <- as.data.table(onlySocialConservatives)
+
+actualSocialConservativeMeans <- vector(mode = 'list')
+actualSocialConservativeSDs <- vector(mode = 'list')
+
+socialPolicyGoalsItems <- c(colnames(socialPolicyGoals))
+
+for (policyGoalNumber in socialPolicyGoalsItems)
+{
+  actualSocialConservativeMeans[policyGoalNumber] <- colMeans(onlySocialConservatives[,..policyGoalNumber])
+  actualSocialConservativeSDs[policyGoalNumber] <- colSds(onlySocialConservatives[,..policyGoalNumber])
+}
+
+# EXTRACTING SOCIAL POLICY GOAL TEXTS
+
+sliderTextIdentifier <- as.numeric(substr(colnames(socialPolicyGoals), 13, nchar(colnames(socialPolicyGoals))))
+
+socialPolicyGoalsText <- subset(tasksClean, tasksClean$Spreadsheet.Row == sliderTextIdentifier)
+
+actualSocialMeansAndSDs <- data.table(actualSocialConservativeMeans, actualSocialLiberalMeans, actualSocialConservativeSDs, actualSocialLiberalSDs, unique(socialPolicyGoalsText$sliderText))
+
+actualSocialMeansAndSDs <- actualSocialMeansAndSDs %>% rename(policyGoal = V5)
+
+# CALCULATING ACTUAL DIFFERENCES AND ARRANGING BY HIGHEST
+
+for (i in 1:36)
+{
+  actualSocialMeansAndSDs$actualDifference[i] <-     abs(as.numeric(actualSocialMeansAndSDs$actualSocialConservativeMeans[i]) - as.numeric(actualSocialMeansAndSDs$actualSocialLiberalMeans[i]))
+}
+
+actualSocialMeansAndSDs <- arrange(actualSocialMeansAndSDs, -actualDifference)
+
+
+
+
+
+# ECONOMIC LIBERALS
+
+onlyEconomicLiberals <- cleanData %>% dplyr::filter(cleanData$economicLeaning == 'Liberal')
+
+onlyEconomicLiberals <- as.data.table(onlyEconomicLiberals)
+
+actualEconomicLiberalMeans <- vector(mode = 'list')
+actualEconomicLiberalSDs <- vector(mode = 'list')
+
+economicPolicyGoalsItems <- c(colnames(economicPolicyGoals))
+
+for (policyGoalNumber in economicPolicyGoalsItems)
+{
+  actualEconomicLiberalMeans[policyGoalNumber] <- colMeans(onlyEconomicLiberals[,..policyGoalNumber])
+  actualEconomicLiberalSDs[policyGoalNumber] <- colSds(onlyEconomicLiberals[,..policyGoalNumber])
+}
+
+# ECONOMIC CONSERVATIVES
+
+onlyEconomicConservatives <- cleanData %>% dplyr::filter(cleanData$economicLeaning == 'Conservative')
+
+onlyEconomicConservatives <- as.data.table(onlyEconomicConservatives)
+
+actualEconomicConservativeMeans <- vector(mode = 'list')
+actualEconomicConservativeSDs <- vector(mode = 'list')
+
+economicPolicyGoalsItems <- c(colnames(economicPolicyGoals))
+
+for (policyGoalNumber in economicPolicyGoalsItems)
+{
+  actualEconomicConservativeMeans[policyGoalNumber] <- colMeans(onlyEconomicConservatives[,..policyGoalNumber])
+  actualEconomicConservativeSDs[policyGoalNumber] <- colSds(onlyEconomicConservatives[,..policyGoalNumber])
+}
+
+sliderTextIdentifier <- as.numeric(substr(colnames(economicPolicyGoals), 13, nchar(colnames(economicPolicyGoals))))
+
+economicPolicyGoalsText <- subset(tasksClean, tasksClean$Spreadsheet.Row == sliderTextIdentifier)
+
+actualEconomicMeansAndSDs <- data.table(actualEconomicConservativeMeans, actualEconomicLiberalMeans, actualEconomicConservativeSDs, actualEconomicLiberalSDs, unique(economicPolicyGoalsText$sliderText))
+
+actualEconomicMeansAndSDs <- actualEconomicMeansAndSDs %>% rename(policyGoal = V5)
+
+for (i in 1:length(economicPolicyGoalsItems))
+{
+  actualEconomicMeansAndSDs$actualDifference[i] <-     abs(as.numeric(actualEconomicMeansAndSDs$actualEconomicConservativeMeans[i]) - as.numeric(actualEconomicMeansAndSDs$actualEconomicLiberalMeans[i]))
+}
+
+actualEconomicMeansAndSDs <- arrange(actualEconomicMeansAndSDs, -actualDifference)
+
+actualEconomicAndSocialMeansAndSDs <- arrange(rbind(actualSocialMeansAndSDs, actualEconomicMeansAndSDs, use.names=FALSE), -actualDifference)
+
+actualEconomicAndSocialMeansAndSDs <- rename(actualEconomicAndSocialMeansAndSDs, actualConservativeMeans = actualSocialConservativeMeans, actualLiberalMeans = actualSocialLiberalMeans, actualConservativeSDs = actualSocialConservativeSDs, actualLiberalSDs = actualSocialLiberalSDs)
+```
+
+
+### Calculating Perceived Polarization
+```{r}
+for (policyGoalNumber in 1:51)
+{
+  liberalOpinion <- paste('liberalOpinion',policyGoalNumber + 1, sep = '_')
+  conservativeOpinion <- paste('conservativeOpinion',policyGoalNumber + 1, sep = '_')
+  perceivedLiberalMeans[policyGoalNumber] <- colMeans(cleanData[,..liberalOpinion])
+  perceivedConservativeMeans[policyGoalNumber] <- colMeans(cleanData[,..conservativeOpinion])
+}
+perceivedMeans <- data.frame(perceivedConservativeMeans, perceivedLiberalMeans, unique(tasksClean$sliderText))
+
+perceivedMeans <- rename(perceivedMeans, policyGoal = unique.tasksClean.sliderText.)
+
+for (i in 1:51)
+{
+  perceivedMeans$perceivedDifference[i] <-     abs(as.numeric(perceivedMeans$perceivedConservativeMeans[i]) - as.numeric(perceivedMeans$perceivedLiberalMeans[i]))
+}
+
+perceivedMeans <- arrange(perceivedMeans, -perceivedDifference)
+```
+
+### Merging actual and perceived polarisation data from first and second approaches
+```{r}
+combinedPerceivedAndActualData <- merge(actualMeansAndSDs, actualEconomicAndSocialMeansAndSDs, by = 'policyGoal')
+
+combinedPerceivedAndActualData <- merge(combinedPerceivedAndActualData, perceivedMeans, by = 'policyGoal')
+
+combinedPerceivedAndActualData <- combinedPerceivedAndActualData %>% rename(actualConservativeMeansFirstApproach = actualConservativeMeans.x, actualLiberalMeansFirstApproach = actualLiberalMeans.x, actualConservativeSDsFirstApproach = actualConservativeSDs.x, actualLiberalSDsFirstApproach = actualLiberalSDs.x, actualDifferenceFirstApproach = actualDifference.x,                                       actualConservativeMeansSecondApproach = actualConservativeMeans.y, actualLiberalMeansSecondApproach = actualLiberalMeans.y, actualConservativeSDsSecondApproach = actualConservativeSDs.y, actualLiberalSDsSecondApproach = actualLiberalSDs.y, actualDifferenceSecondApproach = actualDifference.y)
+
+combinedPerceivedAndActualData <- combinedPerceivedAndActualData %>% relocate(actualDifferenceFirstApproach, actualDifferenceSecondApproach, perceivedDifference, .after = policyGoal)
+```
+
+
+
+
+### ENVIRONMENT CLEANER
+```{r}
+rm(tasks, task1, task2, task3, task4, task5, task6, demographics, demographicsClean, dummyMatrix, actualConservativeMeans, actualConservativeSDs, actualLiberalMeans, actualLiberalSDs, actualEconomicConservativeMeans, actualEconomicLiberalMeans, actualEconomicConservativeSDs, actualEconomicLiberalSDs, actualSocialConservativeMeans, actualSocialConservativeSDs, actualSocialLiberalMeans, actualSocialLiberalSDs, economicPolicyGoals, economicPolicyGoalsItems, economicPolicyGoalsText, socialPolicyGoals, socialPolicyGoalsItems, socialPolicyGoalsText, economicSocialGoals, i, y, policyGoalNumber, selfOpinion, sliderTextIdentifier, politicalIdeology, politicalIdeologyClean, politicalPartySupport, politicalPartySupportClean, onlyLiberals, onlyConservatives, onlyEconomicConservatives, onlyEconomicLiberals, onlySocialConservatives, onlySocialLiberals, cleanDataSecondApproachTransposed, tasksFinal, tasksClean, conservativeOpinion, liberalOpinion, perceivedConservativeMeans, perceivedLiberalMeans, cleanData, cleanDataSecondApproach, actualEconomicMeansAndSDs, actualSocialMeansAndSDs)
+
+# rm(actualEconomicAndSocialMeansAndSDs, actualMeansAndSDs, perceivedMeans)
+```
