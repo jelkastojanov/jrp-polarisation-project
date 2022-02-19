@@ -40,7 +40,28 @@ tbl_right_self<-tbl_right_self[c(seq(3,137,3)),]
 tbl_right_self
 
 #comparison of means of the right and the left
-comparison<-as.data.frame(cbind(tbl_left_self$mean,tbl_right_self$mean, tbl_left_self$mean-tbl_right_self$mean, tbl_left_self$vars, tbl_right_self$vars))
-names(comparison)<-c("left", "right", "difference", "vars_l", "vars_r")
-comparison
+comparison_self<-as.data.frame(cbind(tbl_left_self$mean,tbl_right_self$mean, tbl_left_self$mean-tbl_right_self$mean, tbl_left_self$vars, tbl_right_self$vars))
+names(comparison_self)<-c("left", "right", "difference", "vars_l", "vars_r")
+comparison_self
 #potentials in var: 27, 33, 39, 45, 51, 54, 60, 102, 108, 120, 123, 126, 132, 135, 141
+
+length(subset(pilot1_slo, politicalCategory=="moderate")$ID)
+
+#means of metaperceptions: left perception
+tbl_left_meta_data<-pilot1_slo[,-c(1:18)]
+tbl_left_meta_data<-tbl_left_meta_data[,c(seq(2,140,3))]
+tbl_left_meta<-as.data.frame(describe(tbl_left_meta_data))
+tbl_left_meta
+
+#means of metaperceptions: right perception
+tbl_right_meta_data<-pilot1_slo[,-c(1:18)]
+tbl_right_meta_data<-tbl_right_meta_data[,c(seq(1,140,3))]
+tbl_right_meta<-as.data.frame(describe(tbl_right_meta_data))
+tbl_right_meta
+
+#comparison of meta means of the right and the left
+comparison_meta<-as.data.frame(cbind(tbl_left_meta$mean,tbl_right_meta$mean, tbl_left_meta$mean-tbl_right_meta$mean, tbl_left_meta$vars, tbl_right_meta$vars))
+names(comparison_meta)<-c("left", "right", "difference", "vars_l", "vars_r")
+comparison_meta
+
+
