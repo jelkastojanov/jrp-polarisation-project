@@ -28,16 +28,23 @@ library(car)
 library(MPsychoR)
 library(eigenmodel)
 library(rmcorr)
+library(ppcor)
 
 options(scipen = 999) # Remove scientific notation
 `%notin%` <- Negate(`%in%`) # Define %notin% function
 ```
 
-Load data (all .xlsx files)
+################## UK ##################
+
+#########
+
+DATA LOADING
+
+########
 
 ```{r}
 # Specify the path accordingly
-xlsx_files <- list.files(path='pilot-1/data', pattern="*.xlsx", full.names=TRUE)
+xlsx_files <- list.files(path='UK/Raw data', pattern="*.xlsx", full.names=TRUE)
 
 # Specify names of the dataframes 
 names_xlsx <- sub('.*\\/', '', xlsx_files)
@@ -53,7 +60,11 @@ names(all_xlsx) <- names_xlsx
 list2env(all_xlsx, envir=.GlobalEnv)
 ```
 
-Data cleaning
+#########
+
+DATA CLEANING
+
+########
 
 ```{r}
 # Rename dataframes
@@ -126,14 +137,15 @@ TASK 1: All 7 of us should go through the policy goals included in Pilot 1 (SLO/
 TASK 2 (Analysis steps):
 
 1. Categorise people based on political affiliation
-  1a. Average economic and social views and classify those over 50 as conservative, those below 50 as liberal
-  1b. Use economic and social views separately for economic and social goals (Same classification logic)
+  1a. Average economic and social views and classify those over 50 as conservative, those below 50 as liberal.
+  1b. Use economic and social views separately for economic and social goals (Same classification logic).
   1c. Use the approach from Zmigrod et al. (2018) - Scores for each political party can be found in the Supplementary materials. Some political parties might not have scores so look for alternative YouGov data.
   
 2. Calculate actual disagreement between conservative and liberal participants - For this part, exclude strict moderates (those who scored 50).
-3. Calculate perceived disagreement between conservative and liberal participants (first calculate the difference scores within each participant and then average them) - Strict moderates should be included at first, but when we are doing the comparison between liberal and conservative samples, they should be exluded again (since they don't strictly fall into any of the political categories).
+3. Calculate perceived disagreement between conservative and liberal participants (first calculate the difference scores within each participant and then calculate the descriptive stats of these difference scores). Strict moderates should be included at first, but when we are doing the comparison between liberal and conservative samples, they should be exluded again (since they don't strictly fall into any of the political categories).
 
 ```{r}
+# INITIAL EXAMINATION OF THE DATA
 cor.test(politicalIdeologyFinal$economiclViews, politicalIdeologyFinal$socialViews) # How correlated are economic and social views?
 
 # Approach 1a
@@ -154,7 +166,7 @@ politicalIdeologyFinal %>%
 politicalIdeologyFinal %>%
   dplyr::filter(socialViews == 50)
 
-# Classification based on average scores
+# Classification based on average scores FOR COUNTING PURPOSES
 politicalIdeologyFinal$politicalAffiliationGroup <- 
   if_else(politicalIdeologyFinal$averageIdeology > 50, 'Conservative', 
   if_else(politicalIdeologyFinal$averageIdeology < 50, 'Liberal', 'Moderate'))
@@ -175,15 +187,475 @@ politicalIdeologyFinal$socialGroup <-
 
 table(politicalIdeologyFinal$socialGroup)
 
-# Summary stats that you care about the most
-# You can save grouped summary stats into an object and export it using write.csv() function
-X <- pilot1Data %>% # Remember that you don't currently have political affiliation columns in this dataset (pilot1Data)!
-  dlyr::filter(politicalAffiliationGroup != 'Moderate') %>%
-  dplyr::group_by(policyGoal, perspective) %>% # Group by politicalAffiliationGroup later as well
-  summarise(meanApproval = mean(response), medianApproval = median(response), sdApproval = sd(response), madApproval = mad(response))
+# Categorisation of participants and policy goals ON TASK DATA
 
-# Specify the score for each party - Approach 1c
-pilot1Data$politicalPartyScore <- 
-  if_else(pilot1Data$politicalParty == 'Labour', 3.2, 999) # Add other political parties here
+# Average political ideology
+pilot1Data$politicalIdeology <- (pilot1Data$economiclViews + pilot1Data$socialViews) / 2
+
+# Scores based on Zmigrod et al. (2018)
+
+# These calculations provided the following conservatism scores for each political party: UKIP (+2.27), Conservative Party (+1.55), Liberal Democrats (−0.64), Plaid Cymru (−1.00), Scottish National Party (−1.75), Labour Party (−2.5), and Green Party (−5.5).
+unique(pilot1Data$politicalParty)
+
+table(pilot1Data$politicalConservatismScore)
+
+pilot1Data$politicalConservatismScore <- 
+  ifelse(pilot1Data$politicalParty %in% c('Labour', 'Voted Conservative, actually Labour'), -2.5, 
+  ifelse(pilot1Data$politicalParty %in% c('Conservative', 'Republican party'), 1.55, 
+  ifelse(pilot1Data$politicalParty %in% c('UKIP', 'BUF'), 2.27,
+  ifelse(pilot1Data$politicalParty == 'Green', -5.5,
+  ifelse(pilot1Data$politicalParty == 'Scottish National Party', -1.75,
+  ifelse(pilot1Data$politicalParty == 'Liberal Democrats', -0.64, 'No score'))))))
+
+# Categorisation of policy goals
+pilot1Data$policyGoalCategory <- if_else(pilot1Data$policyGoal %in% 
+  c("Higher income for minimum wage workers", "Helping wealthy individuals obtain tax benefits", "Helping major corporations obtain tax benefits", "Reducing carbon pollution", "Increasing public funding for the National Health Service (NHS)", "Having a more privatised healthcare", "Supporting British (as opposed to international) businesses and products", "Strengthening trade unions (Trade unions are organisations with members who are usually workers or employees, and trade unions look after workers' rights and interests.)", "Supporting free market economy with little government interference", "Increasing donations to UK-based charities working on issues within the UK as opposed to international charities", "Increasing people’s support for a universal basic income pilot (Universal basic income is a regular payment that is given to everyone in society to create a minimum income floor.)", "Reducing the financial strain on low-income earners and families", "Preventing borrowers from becoming over-indebted", "Ensuring people save enough money for retirement", "Increasing the circle of beneficiaries of Universal Credit (Universal Credit is a payment to help with your living costs.)"), "Economic", "Social")
+
+pilot1Data$politicalIdeologyGroups <- 
+  if_else(pilot1Data$politicalIdeology > 50, 'Conservative',
+  if_else(pilot1Data$politicalIdeology < 50, 'Liberal', 'Moderate'))
+
+table(pilot1Data$politicalIdeologyGroups)
+
+pilot1Data$economicViewsGroups <- 
+  if_else(pilot1Data$economiclViews > 50, 'Conservative',
+  if_else(pilot1Data$economiclViews < 50, 'Liberal', 'Moderate'))
+
+table(pilot1Data$economicViewsGroups)
+
+pilot1Data$socialViewsGroups <- 
+  if_else(pilot1Data$socialViews > 50, 'Conservative',
+  if_else(pilot1Data$socialViews < 50, 'Liberal', 'Moderate'))
+
+table(pilot1Data$socialViewsGroups)
+
+pilot1Data$conservatismScoreGroups <- 
+  if_else(pilot1Data$politicalConservatismScore %in% c("1.55", "2.27"), 'Conservative',
+  if_else(pilot1Data$politicalConservatismScore %in% c("-5.5", "-2.5", "-1.75", "-0.64"), 'Liberal',
+  if_else(pilot1Data$politicalConservatismScore == 'No score', 'Not classified', 'Mistake')))
+
+table(pilot1Data$conservatismScoreGroups)
+
+# Data split by perspective
+pilot1DataSelf <- pilot1Data %>%
+  dplyr::filter(perspective == 'selfOpinion')
+
+pilot1DataPerceived <- pilot1Data %>%
+  dplyr::filter(perspective %in% c('liberalOpinion', 'conservativeOpinion'))
 ```
 
+#########
+
+FIRST APPROACH - AVERAGE AFFILIATION
+
+########
+
+```{r}
+# First approach
+
+# Self
+summaryPoliticalIdeologyGroupsSelf <- pilot1DataSelf %>% 
+  dplyr::group_by(politicalIdeologyGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summaryPoliticalIdeologyGroupsSelfDcast <- dcast(summaryPoliticalIdeologyGroupsSelf, 
+                                        policyGoal ~ politicalIdeologyGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summaryPoliticalIdeologyGroupsSelfDcast$actualDifference_M <- summaryPoliticalIdeologyGroupsSelfDcast$meanSupport_Liberal - summaryPoliticalIdeologyGroupsSelfDcast$meanSupport_Conservative
+
+summaryPoliticalIdeologyGroupsSelfDcast$actualDifference_MDN <- summaryPoliticalIdeologyGroupsSelfDcast$medianSupport_Liberal - summaryPoliticalIdeologyGroupsSelfDcast$medianSupport_Conservative
+
+write.csv(summaryPoliticalIdeologyGroupsSelfDcast, 'summaryPoliticalIdeologyGroups_Actual.csv')
+
+# Perceived
+pilot1DataPerceived <- pilot1Data %>%
+  dplyr::filter(perspective %in% c('liberalOpinion', 'conservativeOpinion'))
+
+pilot1DataPerceivedDcast <- dcast(pilot1DataPerceived, 
+                                        participantID + policyGoal ~ perspective, 
+                                        value.var = 'response')
+
+pilot1DataPerceivedDcast$perceivedDifference <- pilot1DataPerceivedDcast$liberalOpinion - pilot1DataPerceivedDcast$conservativeOpinion
+
+summaryPoliticalIdeologyGroupsPerceived <- pilot1DataPerceivedDcast %>% 
+  dplyr::group_by(policyGoal) %>%
+  dplyr::summarise(meanPerceivedDifference  = mean(perceivedDifference), medianPerceivedDifference = median(perceivedDifference), sdPerceivedDifference = sd(perceivedDifference), madPerceivedDifference = mad(perceivedDifference), meanConservative = mean(conservativeOpinion), medianConservative = median(conservativeOpinion), sdConservative = sd(conservativeOpinion), madConservative = mad(conservativeOpinion), meanLiberal = mean(liberalOpinion), medianLiberal = median(liberalOpinion), sdLiberal = sd(liberalOpinion), madLiberal = mad(liberalOpinion))
+
+write.csv(summaryPoliticalIdeologyGroupsPerceived, 'summaryPoliticalIdeologyGroups_Perceived.csv')
+```
+
+#########
+
+SECOND APPROACH - SEPARATE ECONOMIC AND SOCIAL VIEWS
+
+########
+
+```{r}
+# Self
+
+# Economic goals
+summaryEconomicGroupsSelf <- pilot1DataSelf %>% 
+  dplyr::filter(policyGoalCategory == 'Economic') %>%
+  dplyr::group_by(economicViewsGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summaryEconomicGroupsSelfDcast <- dcast(summaryEconomicGroupsSelf, 
+                                        policyGoal ~ economicViewsGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summaryEconomicGroupsSelfDcast$actualDifference_M <- summaryEconomicGroupsSelfDcast$meanSupport_Liberal - summaryEconomicGroupsSelfDcast$meanSupport_Conservative
+
+summaryEconomicGroupsSelfDcast$actualDifference_MDN <- summaryEconomicGroupsSelfDcast$medianSupport_Liberal - summaryEconomicGroupsSelfDcast$medianSupport_Conservative
+
+# Social goals
+summarySocialGroupsSelf <- pilot1DataSelf %>% 
+  dplyr::filter(policyGoalCategory == 'Social') %>%
+  dplyr::group_by(socialViewsGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summarySocialGroupsSelfDcast <- dcast(summarySocialGroupsSelf, 
+                                        policyGoal ~ socialViewsGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summarySocialGroupsSelfDcast$actualDifference_M <- summarySocialGroupsSelfDcast$meanSupport_Liberal - summarySocialGroupsSelfDcast$meanSupport_Conservative
+
+summarySocialGroupsSelfDcast$actualDifference_MDN <- summarySocialGroupsSelfDcast$medianSupport_Liberal - summarySocialGroupsSelfDcast$medianSupport_Conservative
+
+summarySocialEconomicGroupsSelfDcast <- bind_rows(summaryEconomicGroupsSelfDcast, summarySocialGroupsSelfDcast)
+
+write.csv(summarySocialEconomicGroupsSelfDcast, 'summarySocialEconomicGroups_Actual.csv')
+
+# Perceived file will be the same as for the first approach.
+```
+
+#########
+
+THIRD APPROACH - SCORES
+
+########
+
+```{r}
+# Self
+table(pilot1DataSelf$conservatismScoreGroups)
+table(summaryConservatismScoreGroupsSelf$conservatismScoreGroups)
+
+summaryConservatismScoreGroupsSelf <- pilot1DataSelf %>% 
+  dplyr::group_by(conservatismScoreGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summaryConservatismScoreGroupsSelfDcast <- dcast(summaryConservatismScoreGroupsSelf, 
+                                        policyGoal ~ conservatismScoreGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summaryConservatismScoreGroupsSelfDcast$actualDifference_M <- summaryConservatismScoreGroupsSelfDcast$meanSupport_Liberal - summaryConservatismScoreGroupsSelfDcast$meanSupport_Conservative
+
+summaryConservatismScoreGroupsSelfDcast$actualDifference_MDN <- summaryConservatismScoreGroupsSelfDcast$medianSupport_Liberal - summaryConservatismScoreGroupsSelfDcast$medianSupport_Conservative
+
+write.csv(summaryConservatismScoreGroupsSelfDcast, 'summaryConservatismScoreGroups_Actual.csv')
+```
+
+#########
+
+PCA
+
+########
+
+```{r}
+install.packages('factoextra')
+library(factoextra)
+
+PCASelf <- select(pilot1DataSelf, c(participantID, policyGoal, response))
+
+PCASelf <- dcast(PCASelf,
+                 participantID ~ policyGoal,
+                 value.var = 'response')
+
+PCASelfAnonymous <- select(PCASelf, -participantID)
+
+# Rename columns - With participantID
+names(PCASelf) <- c('participantID', 'intergrationEnglishSkills', 'politicalCorrectness', 'STDs', 'lowerImmigration', 'speedLimit', 'military', 'retirement', 'hormoneTherapy', 'firstJobSearch', 'adoptionSingleParent', 'adopSameSexCou', 'immEveryone', 'immHighSkill', 'LGBTQlanguage', 'privateHealth', 'corportationTax', 'wealthTax', 'minimumWage', 'financialLiteracy', 'fertilitySameSex', 'firearms', 'UKdonations', 'UBI', 'publicNHS', 'contraception', 'sustainableTransport', 'universalCredit', 'covidVacc', 'childVacc', 'policePower', 'culturalClothes', 'highEduAfford', 'dismissEmployees', 'mentalHealth', 'overIndebted', 'STEM', 'animalWelfare', 'sharedParLeave', 'abortion', 'carbonPoll', 'crimePunishment', 'homelessness', 'publicSmoking', 'strainLIFamilies', 'energyConsumption', 'minorityBackground', 'tradeUnions', 'britishProducts', 'freeMarket', 'countryBorder', 'policeControl')
+
+write.csv(PCASelf, 'PCASelf.csv')
+
+# Rename columns - Without participantID
+names(PCASelfAnonymous) <- c('intergrationEnglishSkills', 'politicalCorrectness', 'STDs', 'lowerImmigration', 'speedLimit', 'military', 'retirement', 'hormoneTherapy', 'firstJobSearch', 'adoptionSingleParent', 'adopSameSexCou', 'immEveryone', 'immHighSkill', 'LGBTQlanguage', 'privateHealth', 'corportationTax', 'wealthTax', 'minimumWage', 'financialLiteracy', 'fertilitySameSex', 'firearms', 'UKdonations', 'UBI', 'publicNHS', 'contraception', 'sustainableTransport', 'universalCredit', 'covidVacc', 'childVacc', 'policePower', 'culturalClothes', 'highEduAfford', 'dismissEmployees', 'mentalHealth', 'overIndebted', 'STEM', 'animalWelfare', 'sharedParLeave', 'abortion', 'carbonPoll', 'crimePunishment', 'homelessness', 'publicSmoking', 'strainLIFamilies', 'energyConsumption', 'minorityBackground', 'tradeUnions', 'britishProducts', 'freeMarket', 'countryBorder', 'policeControl')
+                  
+resPCA <- prcomp(PCASelfAnonymous, scale = TRUE)
+fviz_eig(resPCA)
+print(resPCA)
+
+# Add economic/social views
+PCASelfIdeology <- select(pilot1DataSelf, c(participantID, economicViews, socialViews, policyGoal, response))
+
+PCASelfIdeology <- dcast(PCASelfIdeology,
+                 participantID + economicViews + socialViews ~ policyGoal,
+                 value.var = 'response')
+
+names(PCASelfIdeology) <- c('participantID', 'economicViews', 'socialViews', 'intergrationEnglishSkills', 'politicalCorrectness', 'STDs', 'lowerImmigration', 'speedLimit', 'military', 'retirement', 'hormoneTherapy', 'firstJobSearch', 'adoptionSingleParent', 'adopSameSexCou', 'immEveryone', 'immHighSkill', 'LGBTQlanguage', 'privateHealth', 'corportationTax', 'wealthTax', 'minimumWage', 'financialLiteracy', 'fertilitySameSex', 'firearms', 'UKdonations', 'UBI', 'publicNHS', 'contraception', 'sustainableTransport', 'universalCredit', 'covidVacc', 'childVacc', 'policePower', 'culturalClothes', 'highEduAfford', 'dismissEmployees', 'mentalHealth', 'overIndebted', 'STEM', 'animalWelfare', 'sharedParLeave', 'abortion', 'carbonPoll', 'crimePunishment', 'homelessness', 'publicSmoking', 'strainLIFamilies', 'energyConsumption', 'minorityBackground', 'tradeUnions', 'britishProducts', 'freeMarket', 'countryBorder', 'policeControl')
+
+PCASelfIdeology$participantID <- NULL
+
+library(ppcor)
+cor(PCASelfIdeology)
+```
+
+################## SLO ##################
+
+#########
+
+DATA LOADING
+
+########
+
+```{r}
+# Specify the path accordingly
+csv_files <- list.files(path='SLO/Raw data', pattern="*.csv", full.names=TRUE)
+
+# Specify names of the dataframes 
+names_csv <- sub('.*\\/', '', csv_files)
+names_csv <- substr(names_csv, 1, nchar(names_csv) - 4)
+
+# List all files
+all_csv <- lapply(csv_files, read_csv)
+
+# Name all files
+names(all_csv) <- names_csv
+
+# Save each element in the list into a separate R object
+list2env(all_csv, envir = .GlobalEnv)
+```
+
+#########
+
+DATA CLEANING
+
+########
+
+```{r}
+# Rename dataframes
+additionalGoalsSlo <- `pilot-1-additional-goals-slo`
+consentSlo <- `pilot-1-consent-slo`
+demographicsSlo <- `pilot-1-demographics-slo`
+experimentDetailsSlo <- `pilot-1-experiment-details-slo`
+politicalIdeologySlo <- `pilot-1-political-ideology-slo`
+politicalPartySlo <- `pilot-1-political-party-slo`
+taskConLibSelfSlo <- `pilot-1-task-con-lib-self-slo`
+taskConSelfLibSlo <- `pilot-1-task-con-self-lib-slo`
+taskLibConSelfSlo <- `pilot-1-task-lib-con-self-slo`
+taskLibSelfConSlo <- `pilot-1-task-lib-self-con-slo`
+taskSelfConLibSlo <- `pilot-1-task-self-con-lib-slo`
+taskSelfLibConSlo <- `pilot-1-task-self-lib-con-slo`
+liberarianismSlo <- `pilot-1-libertarianism-slo`
+technicalDifficultiesSlo <- `pilot-1-technical-difficulties-slo`
+
+taskCombinedSlo <- bind_rows(taskConLibSelfSlo, taskConSelfLibSlo, taskLibConSelfSlo, taskLibSelfConSlo, taskSelfConLibSlo, taskSelfLibConSlo)
+
+taskCombinedSlo <- taskCombinedSlo[, c('participantID', 'taskRandomiser', 'Trial Number', 'Zone Name', 'Zone Type', 'Reaction Time', 'Response', 'display', 'sliderText')]
+
+# Rename columns to manipulate them easier
+names(taskCombinedSlo)[3] <- 'trialNumber'
+names(taskCombinedSlo)[4] <- 'zoneName'
+names(taskCombinedSlo)[5] <- 'zoneType'
+names(taskCombinedSlo)[6] <- 'reactionTime'
+names(taskCombinedSlo)[7] <- 'response'
+
+taskCombinedSlo <- taskCombinedSlo %>%
+  dplyr::filter(display != 'instructions' & zoneType == 'response_slider_endValue')
+
+# Cleaned task data
+taskFinalSlo <- taskCombinedSlo[, c('participantID', 'taskRandomiser', 'trialNumber', 'zoneName', 'reactionTime', 'response', 'sliderText')]
+
+names(taskFinalSlo)[4] <- 'perspective'
+names(taskFinalSlo)[7] <- 'policyGoal'
+
+# Clean political ideology
+politicalIdeologyFinalSlo <- politicalIdeologySlo %>%
+  dplyr::filter(politicalIdeologySlo$`Zone Type` == 'response_slider_endValue')
+
+politicalIdeologyFinalSlo <- politicalIdeologyFinalSlo[, c('participantID', 'Zone Name', 'Response')]
+
+# Cleaned political ideology
+politicalIdeologyFinalSlo <- dcast(politicalIdeologyFinalSlo,
+                                participantID ~ `Zone Name`,
+                                value.var = 'Response')
+
+# Combine all datasets
+pilot1DataSlo <- left_join(demographicsSlo, taskFinalSlo, by = 'participantID')
+pilot1DataSlo <- left_join(pilot1DataSlo, additionalGoalsSlo, by = "participantID")
+pilot1DataSlo <- left_join(pilot1DataSlo, politicalPartySlo, by = "participantID")
+pilot1DataSlo <- left_join(pilot1DataSlo, politicalIdeologyFinalSlo, by = "participantID")
+pilot1DataSlo <- left_join(pilot1DataSlo, liberarianismSlo, by = "participantID")
+pilot1DataSlo <- left_join(pilot1DataSlo, technicalDifficultiesSlo, by = "participantID")
+
+# Export data into a .csv file
+write.csv(pilot1DataSlo, 'pilot1DataSlo.csv')
+```
+
+#########
+
+DATA ANALYSIS
+
+########
+
+```{r}
+# INITIAL EXAMINATION OF THE DATA
+cor.test(politicalIdeologyFinalSlo$economiclViews, politicalIdeologyFinalSlo$socialViews) # How correlated are economic and social views? (r = .44)
+
+# Approach 1a
+politicalIdeologyFinalSlo$averageIdeology <- (politicalIdeologyFinalSlo$economiclViews + politicalIdeologyFinalSlo$socialViews) / 2
+
+# Create a histogram
+politicalIdeologyFinalSlo %>%
+  ggplot(aes(x = averageIdeology)) +
+  geom_histogram()
+
+# How many people scored 50 on different political ideology variables? 
+
+# 4
+politicalIdeologyFinalSlo %>%
+  dplyr::filter(averageIdeology == 50)
+
+# 4
+politicalIdeologyFinalSlo %>%
+  dplyr::filter(economiclViews == 50)
+
+# 3
+politicalIdeologyFinalSlo %>%
+  dplyr::filter(socialViews == 50)
+
+# Classification based on average scores FOR COUNTING PURPOSES
+politicalIdeologyFinalSlo$politicalAffiliationGroup <- 
+  if_else(politicalIdeologyFinalSlo$averageIdeology > 50, 'Conservative', 
+  if_else(politicalIdeologyFinalSlo$averageIdeology < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinalSlo$politicalAffiliationGroup) # 15 conservative, 29 liberal, 4 moderate
+
+# Classification based on economic views
+politicalIdeologyFinalSlo$economicGroup <- 
+  if_else(politicalIdeologyFinalSlo$economiclViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinalSlo$economiclViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinalSlo$economicGroup) # 19 conservative, 25 liberal, 4 moderate
+
+# Classification based on social views
+politicalIdeologyFinalSlo$socialGroup <- 
+  if_else(politicalIdeologyFinalSlo$socialViews > 50, 'Conservative', 
+  if_else(politicalIdeologyFinalSlo$socialViews < 50, 'Liberal', 'Moderate'))
+
+table(politicalIdeologyFinalSlo$socialGroup) # 12 conservative, 33 liberal, 3 moderate
+
+# Categorisation of participants and policy goals ON TASK DATA
+
+# Average political ideology
+pilot1DataSlo$politicalIdeology <- (pilot1DataSlo$economiclViews + pilot1DataSlo$socialViews) / 2
+
+# Categorisation of policy goals - @ŽIGA, DO THIS SINCE THEY ARE IN SLOVENIAN.
+# pilot1DataSlo$policyGoalCategory <- if_else(pilot1DataSlo$policyGoal %in% c("Higher income for minimum wage workers", "Helping wealthy individuals obtain tax benefits", "Helping major corporations obtain tax benefits", "Reducing carbon pollution", "Increasing public funding for the National Health Service (NHS)", "Having a more privatised healthcare", "Supporting British (as opposed to international) businesses and products", "Strengthening trade unions (Trade unions are organisations with members who are usually workers or employees, and trade unions look after workers' rights and interests.)", "Supporting free market economy with little government interference", "Increasing donations to UK-based charities working on issues within the UK as opposed to international charities", "Increasing people’s support for a universal basic income pilot (Universal basic income is a regular payment that is given to everyone in society to create a minimum income floor.)", "Reducing the financial strain on low-income earners and families", "Preventing borrowers from becoming over-indebted", "Ensuring people save enough money for retirement", "Increasing the circle of beneficiaries of Universal Credit (Universal Credit is a payment to help with your living costs.)"), "Economic", "Social")
+
+pilot1DataSlo$politicalIdeologyGroups <- 
+  if_else(pilot1DataSlo$politicalIdeology > 50, 'Conservative',
+  if_else(pilot1DataSlo$politicalIdeology < 50, 'Liberal', 'Moderate'))
+
+pilot1DataSlo$economicViewsGroups <- 
+  if_else(pilot1DataSlo$economiclViews > 50, 'Conservative',
+  if_else(pilot1DataSlo$economiclViews < 50, 'Liberal', 'Moderate'))
+
+pilot1DataSlo$socialViewsGroups <- 
+  if_else(pilot1DataSlo$socialViews > 50, 'Conservative',
+  if_else(pilot1DataSlo$socialViews < 50, 'Liberal', 'Moderate'))
+
+# Data split by perspective
+pilot1DataSelfSlo <- pilot1DataSlo %>%
+  dplyr::filter(perspective == 'selfOpinion')
+
+pilot1DataPerceivedSlo <- pilot1DataSlo %>%
+  dplyr::filter(perspective %in% c('liberalOpinion', 'conservativeOpinion'))
+```
+
+#########
+
+FIRST APPROACH - AVERAGE AFFILIATION
+
+########
+
+```{r}
+# First approach
+
+# Self
+summaryPoliticalIdeologyGroupsSelfSlo <- pilot1DataSelfSlo %>% 
+  dplyr::group_by(politicalIdeologyGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summaryPoliticalIdeologyGroupsSelfDcastSlo <- dcast(summaryPoliticalIdeologyGroupsSelfSlo, 
+                                        policyGoal ~ politicalIdeologyGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summaryPoliticalIdeologyGroupsSelfDcastSlo$actualDifference_M <- summaryPoliticalIdeologyGroupsSelfDcastSlo$meanSupport_Liberal - summaryPoliticalIdeologyGroupsSelfDcastSlo$meanSupport_Conservative
+
+summaryPoliticalIdeologyGroupsSelfDcastSlo$actualDifference_MDN <- summaryPoliticalIdeologyGroupsSelfDcastSlo$medianSupport_Liberal - summaryPoliticalIdeologyGroupsSelfDcastSlo$medianSupport_Conservative
+
+write.csv(summaryPoliticalIdeologyGroupsSelfDcastSlo, 'summaryPoliticalIdeologyGroups_Actual_Slo.csv')
+
+# Perceived
+pilot1DataPerceivedSlo <- pilot1DataSlo %>%
+  dplyr::filter(perspective %in% c('liberalOpinion', 'conservativeOpinion'))
+
+pilot1DataPerceivedDcastSlo <- dcast(pilot1DataPerceivedSlo, 
+                                        participantID + policyGoal ~ perspective, 
+                                        value.var = 'response')
+
+pilot1DataPerceivedDcastSlo$perceivedDifference <- pilot1DataPerceivedDcastSlo$liberalOpinion - pilot1DataPerceivedDcastSlo$conservativeOpinion
+
+summaryPoliticalIdeologyGroupsPerceivedSlo <- pilot1DataPerceivedDcastSlo %>% 
+  dplyr::group_by(policyGoal) %>%
+  dplyr::summarise(meanPerceivedDifference  = mean(perceivedDifference), medianPerceivedDifference = median(perceivedDifference), sdPerceivedDifference = sd(perceivedDifference), madPerceivedDifference = mad(perceivedDifference), meanConservative = mean(conservativeOpinion), medianConservative = median(conservativeOpinion), sdConservative = sd(conservativeOpinion), madConservative = mad(conservativeOpinion), meanLiberal = mean(liberalOpinion), medianLiberal = median(liberalOpinion), sdLiberal = sd(liberalOpinion), madLiberal = mad(liberalOpinion))
+
+write.csv(summaryPoliticalIdeologyGroupsPerceivedSlo, 'summaryPoliticalIdeologyGroups_Perceived_Slo.csv')
+```
+
+#########
+
+SECOND APPROACH - SEPARATE ECONOMIC AND SOCIAL VIEWS
+
+########
+
+@ŽIGA, RUN THE CODE BELOW ONCE YOU CATEGORISE THE POLICY GOALS AS ECONOMIC OR SOCIAL ABOVE.
+
+```{r}
+# Self
+
+# Economic goals
+summaryEconomicGroupsSelfSlo <- pilot1DataSelfSlo %>% 
+  dplyr::filter(policyGoalCategory == 'Economic') %>%
+  dplyr::group_by(economicViewsGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summaryEconomicGroupsSelfDcastSlo <- dcast(summaryEconomicGroupsSelfSlo, 
+                                        policyGoal ~ economicViewsGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summaryEconomicGroupsSelfDcastSlo$actualDifference_M <- summaryEconomicGroupsSelfDcastSlo$meanSupport_Liberal - summaryEconomicGroupsSelfDcastSlo$meanSupport_Conservative
+
+summaryEconomicGroupsSelfDcastSlo$actualDifference_MDN <- summaryEconomicGroupsSelfDcastSlo$medianSupport_Liberal - summaryEconomicGroupsSelfDcastSlo$medianSupport_Conservative
+
+# Social goals
+summarySocialGroupsSelfSlo <- pilot1DataSelfSlo %>% 
+  dplyr::filter(policyGoalCategory == 'Social') %>%
+  dplyr::group_by(socialViewsGroups, policyGoal) %>%
+  dplyr::summarise(meanSupport  = mean(response), sdSupport = sd(response), medianSupport = median(response), madSupport = mad(response))
+
+summarySocialGroupsSelfDcastSlo <- dcast(summarySocialGroupsSelfSlo, 
+                                        policyGoal ~ socialViewsGroups, 
+                                        value.var = c('meanSupport', 'medianSupport', 'sdSupport', 'madSupport'))
+
+summarySocialGroupsSelfDcastSlo$actualDifference_M <- summarySocialGroupsSelfDcastSlo$meanSupport_Liberal - summarySocialGroupsSelfDcastSlo$meanSupport_Conservative
+
+summarySocialGroupsSelfDcastSlo$actualDifference_MDN <- summarySocialGroupsSelfDcastSlo$medianSupport_Liberal - summarySocialGroupsSelfDcastSlo$medianSupport_Conservative
+
+summarySocialEconomicGroupsSelfDcastSlo <- bind_rows(summaryEconomicGroupsSelfDcastSlo, summarySocialGroupsSelfDcastSlo)
+
+write.csv(summarySocialEconomicGroupsSelfDcastSlo, 'summarySocialEconomicGroups_Actual_Slo.csv')
+
+# Perceived file will be the same as for the first approach.
+```
