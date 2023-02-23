@@ -6,5 +6,5 @@ Across different countries and samples, this project examines how different comm
 
 This repository includes:
 
-  1. Analysis of pilot data (Pilots 1, 2 & 3) [Completed]
+  1. Analysis of pilot data (Pilots 1 & 2) [Completed]
   2. Analysis of data from the two main studies (Studies 1 & 2) [Data collection ongoing]
