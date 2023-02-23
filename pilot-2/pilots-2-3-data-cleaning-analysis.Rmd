@@ -1,0 +1,399 @@
+---
+title: "Pilots 2 & 3 (Stimuli validation) - Cleaning & analysis code"
+output: html_document
+date: '2023-02-23'
+---
+
+Load packages
+
+```{r}
+library(afex)
+library(bootnet)
+library(car)
+library(dplyr)
+library(eigenmodel)
+library(ggplot2)
+library(glasso)
+library(Hmisc)
+library(interactions)
+library(janitor)
+library(lmerTest)
+library(lme4) 
+library(lsmeans)
+library(maditr)
+library(MPsychoR)
+library(NetworkComparisonTest)
+library(networktools)
+library(openxlsx)
+library(patchwork)
+library(ppcor)
+library(qgraph)
+library(readr)
+library(readxl)
+library(rmcorr)
+library(Routliers)
+library(simr)
+library(tidyverse) 
+
+# Remove scientific notation
+options(scipen = 999) 
+
+# Define %notin% function
+`%notin%` <- Negate(`%in%`) 
+```
+
+Visualisation theme
+
+```{r}
+sf <- 1
+
+visualisationTheme <-  theme( 
+  axis.line.y = element_line(colour = "gray40", size = 0.5, lineend = 0),
+  axis.line.x = element_line(colour = 'gray40', size = 0.5, lineend = 0),
+  axis.ticks.x = element_line(colour = 'gray40', size = 0.5, lineend = 0),
+  strip.text.x = element_text(size = 26 * (sf + 1.5),  colour = "black", margin = margin(7, 7, 7, 7)),
+  strip.text.y = element_text(size = 26 * (sf + 1.5),  colour = "black", margin = margin(7, 7, 7, 7)),
+  axis.text.x = element_text(size = 25 * (sf + 1), family = "sans", colour = "black"), 
+  axis.text.y = element_text(size = 25 * (sf + 1), family = "sans", colour = "black"),
+  axis.title.y = element_text(size = 27 * (sf + 1.5), margin = margin(0, 5, 0, 0)),
+  axis.title.x = element_text(size = 27 * (sf + 1.5), margin = margin(0, 5, 0, 0)),
+  panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_rect(fill = "transparent"),
+  legend.position = "top",
+  legend.title = element_text(size = 21 * (sf + 1.5), family = "sans", colour = "black"),
+  legend.text = element_text(size = 27 * (sf + 1.5), family = "sans", colour = "black"),
+  legend.background = element_blank(),
+  text = element_text(size = 30, family = "sans"),
+  plot.title = element_text(size = 21 * (sf + 1.5),  colour = "black", hjust = .5),
+  strip.background = element_blank())
+```
+
+Loading raw files
+
+```{r}
+# Slovenia
+
+# pathSlo <- ""
+
+setwd(pathSlo) 
+fileList <- list.files(pattern = "*.csv")
+
+list2env(
+  lapply(setNames(fileList, make.names(gsub("*.csv$", "", fileList))), 
+         read.csv), envir = .GlobalEnv)
+
+# UK
+
+# pathUK <- ""
+
+setwd(pathUK) 
+fileList <- list.files(pattern = "*.csv")
+
+list2env(
+  lapply(setNames(fileList, make.names(gsub("*.csv$", "", fileList))), 
+         read.csv), envir = .GlobalEnv)
+```
+
+Merging individual files
+
+```{r}
+# Slovenia
+examplesSLO <- bind_rows(examplesConLibSLOP3, examplesLibConSLOP3)
+
+# UK
+demographicsUK <- bind_rows(demographicsUKCP3, demographicsUKLP3, demographicsUKRP3)
+consentUK <- bind_rows(infoSheetUKCP3, infoSheetUKLP3, infoSheetUKRP3)
+definitionsUK <- bind_rows(definitionsUKCP3, definitionsUKLP3, definitionsUKRP3)
+examplesUK <- bind_rows(examplesConLibUKCP3, examplesConLibUKLP3, examplesConLibUKRP3, examplesLibConUKCP3, examplesLibConUKLP3, examplesLibConUKRP3)
+politicalIdeologyUK <- bind_rows(politicalIdeologyUKCP3, politicalIdeologyUKLP3, politicalIdeologyUKRP3)
+politicalPartyUK <- bind_rows(politicalPartyUKCP3, politicalPartyUKLP3, politicalPartyUKRP3)
+technicalDifficultiesUK <- bind_rows(technicalDifficultiesUKCP3, technicalDifficultiesUKLP3, technicalDifficultiesUKRP3)
+```
+
+Cleaning individual files
+
+```{r}
+# Slovenia
+consentSLOClean <- dplyr::select(infoSheetSLOP3, c("participantID", "ageConfirmation", "residenceConfirmation", "votingConfirmation", "PIS", "consentConfirmation"))
+
+consentSLOClean <- na.omit(consentSLOClean)
+
+definitionsSLOClean <- dplyr::select(definitionsSLOP3, c("participantID", "display", "nudgeDefinition", "Zone.Name", "Response"))
+definitionsSLOClean <- definitionsSLOClean %>%
+  filter(display == "tasks" & Zone.Name == "selfOpinion")
+
+definitionsSLOClean$nudge <-
+  if_else(definitionsSLOClean$nudgeDefinition == "socialnormsDefinition.png", "Social norms",
+  if_else(definitionsSLOClean$nudgeDefinition == "defaultsDefinition.png", "Defaults",
+  if_else(definitionsSLOClean$nudgeDefinition == "reframingDefinition.png", "Reframing", "Prompts")))
+
+definitionsSLOClean$ResponseNum <- 
+  if_else(definitionsSLOClean$Response == "1-povsem nasprotujem", 1,
+  if_else(definitionsSLOClean$Response == "2-nasprotujem", 2,
+  if_else(definitionsSLOClean$Response == "3-delno nasprotujem", 3,
+  if_else(definitionsSLOClean$Response == "4-nevtralen_na", 4,
+  if_else(definitionsSLOClean$Response == "5-delno podpiram", 5,
+  if_else(definitionsSLOClean$Response == "6-podpiram", 6, 7))))))
+
+definitionsSLOClean <- dcast(definitionsSLOClean,
+                            participantID ~ nudge,
+                            value.var = "ResponseNum")
+
+demographicsSLOClean <- dplyr::select(demographicsSLOP3, c("participantID", "age", "gender", "education", "firstLanguage"))
+demographicsSLOClean <- na.omit(demographicsSLOClean)
+
+examplesSLOClean <- dplyr::select(examplesSLO, c("participantID", "Zone.Name", "Response", "nudge", "nudgeExample", "nudgeExampleCategory"))
+examplesSLOClean <- examplesSLOClean %>%
+  filter(Zone.Name %in% c("conservativeGoal", "liberalGoal", "economicSocialGoal"))
+
+examplesSLOClean <- dcast(examplesSLOClean,
+                         participantID + nudge + nudgeExampleCategory + nudgeExample ~ Zone.Name,
+                         value.var = "Response")
+
+politicalIdeologySLOClean <- dplyr::select(politicalIdeologySLOP3, c("participantID", "Zone.Name", "Response"))
+politicalIdeologySLOClean <- politicalIdeologySLOClean %>%
+  filter(Zone.Name %in% c("economicViews", "socialViews"))
+
+politicalIdeologySLOClean <- dcast(politicalIdeologySLOClean, 
+                                  participantID ~ Zone.Name,
+                                  value.var = "Response")
+
+politicalPartySLOClean <- dplyr::select(politicalPartySLOP3, c("participantID", "politicalParty"))
+politicalPartySLOClean <- na.omit(politicalPartySLOClean)
+politicalPartySLOClean <- slice(politicalPartySLOClean, 1:(n() - 1)) 
+
+technicalDifficultiesSLOClean <- dplyr::select(technicalDifficultiesSLOP3, c("participantID", "technicalDifficulties", "technicalDifficulties.text"))
+technicalDifficultiesSLOClean <- na.omit(technicalDifficultiesSLOClean)
+technicalDifficultiesSLOClean <- slice(technicalDifficultiesSLOClean, 1:(n() - 1)) 
+
+pilot3SLO <- left_join(consentSLOClean, definitionsSLOClean, by = "participantID")
+pilot3SLO <- left_join(pilot3SLO, demographicsSLOClean, by = "participantID")
+pilot3SLO <- left_join(pilot3SLO, examplesSLOClean, by = "participantID")
+pilot3SLO <- left_join(pilot3SLO, politicalIdeologySLOClean, by = "participantID")
+pilot3SLO <- left_join(pilot3SLO, politicalPartySLOClean, by = "participantID")
+pilot3SLO <- left_join(pilot3SLO, technicalDifficultiesSLOClean, by = "participantID")
+
+# UK
+consentUKClean <- dplyr::select(consentUK, c("participantID", "ageConfirmation", "residenceConfirmation", "votingConfirmation", "PIS", "consentConfirmation"))
+consentUKClean <- na.omit(consentUKClean)
+
+definitionsUKClean <- dplyr::select(definitionsUK, c("participantID", "display", "nudgeDefinition", "Zone.Name", "Response"))
+definitionsUKClean <- definitionsUKClean %>%
+  filter(display == "tasks" & Zone.Name == "selfOpinion")
+
+definitionsUKClean$nudge <-
+  if_else(definitionsUKClean$nudgeDefinition == "socialnormsDefinition.png", "Social norms",
+  if_else(definitionsUKClean$nudgeDefinition == "defaultsDefinition.png", "Defaults",
+  if_else(definitionsUKClean$nudgeDefinition == "reframingDefinition.png", "Reframing", "Prompts")))
+
+definitionsUKClean$ResponseNum <- 
+  if_else(definitionsUKClean$Response == "Strongly oppose", 1,
+  if_else(definitionsUKClean$Response == "Moderately oppose", 2,
+  if_else(definitionsUKClean$Response == "Slightly oppose", 3,
+  if_else(definitionsUKClean$Response == "Neither support nor oppose", 4,
+  if_else(definitionsUKClean$Response == "Slightly support", 5,
+  if_else(definitionsUKClean$Response == "Moderately support", 6, 7))))))
+
+definitionsUKClean <- dcast(definitionsUKClean,
+                            participantID ~ nudge,
+                            value.var = "ResponseNum")
+
+demographicsUKClean <- dplyr::select(demographicsUK, c("participantID", "age", "gender", "education", "UKnationality", "firstLanguage"))
+demographicsUKClean <- na.omit(demographicsUKClean)
+
+examplesUKClean <- dplyr::select(examplesUK, c("participantID", "Zone.Name", "Response", "nudge", "nudgeExample", "nudgeExampleCategory"))
+examplesUKClean <- examplesUKClean %>%
+  filter(Zone.Name %in% c("conservativeGoal", "liberalGoal", "economicSocialGoal"))
+
+examplesUKClean <- dcast(examplesUKClean,
+                         participantID + nudge + nudgeExampleCategory + nudgeExample ~ Zone.Name,
+                         value.var = "Response")
+
+politicalIdeologyUKClean <- dplyr::select(politicalIdeologyUK, c("participantID", "Zone.Name", "Response"))
+politicalIdeologyUKClean <- politicalIdeologyUKClean %>%
+  filter(Zone.Name %in% c("economicViews", "socialViews"))
+
+politicalIdeologyUKClean <- dcast(politicalIdeologyUKClean, 
+                                  participantID ~ Zone.Name,
+                                  value.var = "Response")
+
+politicalPartyUKClean <- dplyr::select(politicalPartyUK, c("participantID", "politicalParty"))
+politicalPartyUKClean <- na.omit(politicalPartyUKClean)
+
+technicalDifficultiesUKClean <- dplyr::select(technicalDifficultiesUK, c("participantID", "technicalDifficulties"))
+technicalDifficultiesUKClean <- na.omit(technicalDifficultiesUKClean)
+
+pilot3UK <- left_join(consentUKClean, definitionsUKClean, by = "participantID")
+pilot3UK <- left_join(pilot3UK, demographicsUKClean, by = "participantID")
+pilot3UK <- left_join(pilot3UK, examplesUKClean, by = "participantID")
+pilot3UK <- left_join(pilot3UK, politicalIdeologyUKClean, by = "participantID")
+pilot3UK <- left_join(pilot3UK, politicalPartyUKClean, by = "participantID")
+pilot3UK <- left_join(pilot3UK, technicalDifficultiesUKClean, by = "participantID")
+```
+
+Load data from Pilot 2 & combine with Pilot 3
+
+Note: A section of Pilot 3 is identical to Pilot 2 and the data from both pilots can be combined.
+
+```{r}
+# Slovenia
+
+# pathPilot2Slo <- ""
+# pilot2SLO <- read.csv(pathPilot2Slo)
+
+pilots23SLO <- bind_rows(pilot2SLO, pilot3SLO)
+
+# Add names of stimuli to the column "nudgeExample"
+pilots23SLO$nudgeExample <- 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Defaults" & pilots23SLO$nudgeExampleCategory == "Conservative", 
+          "defaultsExampleConservative.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Defaults" & pilots23SLO$nudgeExampleCategory == "Liberal", 
+          "defaultsExampleLiberal.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Prompts" & pilots23SLO$nudgeExampleCategory == "Conservative", 
+          "promptsExampleConservative.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Prompts" & pilots23SLO$nudgeExampleCategory == "Liberal", 
+          "promptsExampleLiberal.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Reframing" & pilots23SLO$nudgeExampleCategory == "Conservative", 
+          "reframingExampleConservative.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Reframing" & pilots23SLO$nudgeExampleCategory == "Liberal", 
+          "reframingExampleLiberal.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Social Norms" & pilots23SLO$nudgeExampleCategory == "Conservative", 
+          "socialnormsExampleConservative.png", 
+  if_else(is.na(pilots23SLO$nudgeExample) == TRUE & pilots23SLO$nudge == "Social Norms" & pilots23SLO$nudgeExampleCategory == "Liberal", 
+          "socialnormsExampleLiberal.png", pilots23SLO$nudgeExample))))))))
+
+# UK
+
+# pathPilot2UK <- ""
+# pilot2UK <- read.csv(pathPilot2UK)
+
+pilots23UK <- bind_rows(pilot2UK, pilot3UK)
+
+# Add names of stimuli to the column "nudgeExample"
+pilots23UK$nudgeExample <- 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Defaults" & pilots23UK$nudgeExampleCategory == "Conservative", 
+          "defaultsExampleConservative.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Defaults" & pilots23UK$nudgeExampleCategory == "Liberal", 
+          "defaultsExampleLiberal.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Prompts" & pilots23UK$nudgeExampleCategory == "Conservative", 
+          "promptsExampleConservative.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Prompts" & pilots23UK$nudgeExampleCategory == "Liberal", 
+          "promptsExampleLiberal.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Reframing" & pilots23UK$nudgeExampleCategory == "Conservative", 
+          "reframingExampleConservative.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Reframing" & pilots23UK$nudgeExampleCategory == "Liberal", 
+          "reframingExampleLiberal.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Social Norms" & pilots23UK$nudgeExampleCategory == "Conservative", 
+          "socialnormsExampleConservative.png", 
+  if_else(is.na(pilots23UK$nudgeExample) == TRUE & pilots23UK$nudge == "Social Norms" & pilots23UK$nudgeExampleCategory == "Liberal", 
+          "socialnormsExampleLiberal.png", pilots23UK$nudgeExample))))))))
+```
+
+Visualisations of data from both tasks
+
+1. Task 1: Definitions
+2. Task 2: Examples
+
+```{r}
+# TASK 1: DEFINITIONS 
+
+# Slovenia
+pilots23SLODefinitions <- gather(pilots23SLO, "nudgesDefined", "support", c("defaultsOpinion", "promptsOpinion", "reframingOpinion", "socialNormsOpinion"))
+
+definitionPlotSlo <- pilots23SLODefinitions %>%
+  dplyr::group_by(participantID, nudgesDefined) %>%
+  ggplot(aes(y = support, x = nudgesDefined, color = nudgesDefined, fill = nudgesDefined)) +
+  geom_point(aes(y = support), position = position_dodge2(width = .15), size = 5, alpha = 0.2) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position=position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position=position_dodge(width = 0.3)) +
+  stat_summary(aes(y = support, group = nudgesDefined), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  guides(fill = FALSE, color = guide_legend(title = "Example")) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Nudge') + 
+  ylab('Support') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+ggsave("definitionPlotSlo.png", definitionPlotSlo, device = "png", dpi = 100, width = 60, height = 30, limitsize = FALSE) 
+
+# UK 
+pilots23UKDefinitions <- gather(pilots23UK, "nudgesDefined", "support", c("defaultsOpinion", "promptsOpinion", "reframingOpinion", "socialNormsOpinion"))
+
+definitionPlotUK <- pilots23UKDefinitions %>%
+  dplyr::group_by(participantID, nudgesDefined) %>%
+  ggplot(aes(y = support, x = nudgesDefined, color = nudgesDefined, fill = nudgesDefined)) +
+  geom_point(aes(y = support), position = position_dodge2(width = .15), size = 5, alpha = 0.2) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position=position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position=position_dodge(width = 0.3)) +
+  stat_summary(aes(y = support, group = nudgesDefined), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  guides(fill = FALSE, color = guide_legend(title = "Example")) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Nudge') + 
+  ylab('Support') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+ggsave("definitionPlotUK.png", definitionPlotUK, device = "png", dpi = 100, width = 60, height = 30, limitsize = FALSE) 
+
+# TASK 2: EXAMPLES 
+
+# Slovenia
+pilots23SLO$differenceScoreConLib <- pilots23SLO$conservativeGoal - pilots23SLO$liberalGoal
+
+pilots23SLO$nudge <- 
+  if_else(pilots23SLO$nudge == "Social Norms", "Social norms", pilots23SLO$nudge)
+
+examplePlotSlo <- pilots23SLO %>%
+  dplyr::group_by(nudge, nudgeExample) %>%
+  ggplot(aes(y = differenceScoreConLib, x = nudge, color = nudgeExample, fill = nudgeExample)) +
+  geom_point(aes(y = differenceScoreConLib), position = position_dodge2(width = .15), size = 5, alpha = 0.4) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position=position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position=position_dodge(width = 0.3)) +
+  stat_summary(aes(y = differenceScoreConLib, group = nudge), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  guides(fill = FALSE, color = guide_legend(title = "Example")) +
+  xlab('Nudge') + 
+  ylab('Difference score (Conservative - Liberal)') +
+  ylim(-6, 6) +
+  visualisationTheme
+
+ggsave("examplePlotSlo.png", examplePlotSlo, device = "png", dpi = 100, width = 70, height = 30, limitsize = FALSE) 
+
+# UK
+pilots23UK$differenceScoreConLib <- pilots23UK$conservativeGoal - pilots23UK$liberalGoal
+
+pilots23UK$nudge <- 
+  if_else(pilots23UK$nudge == "Social Norms", "Social norms", pilots23UK$nudge)
+
+examplePlotUK <- pilots23UK %>%
+  dplyr::group_by(nudge, nudgeExample) %>%
+  ggplot(aes(y = differenceScoreConLib, x = nudge, color = nudgeExample, fill = nudgeExample)) +
+  geom_point(aes(y = differenceScoreConLib), position = position_dodge2(width = .15), size = 5, alpha = 0.4) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position=position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position=position_dodge(width = 0.3)) +
+  stat_summary(aes(y = differenceScoreConLib, group = nudge), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  guides(fill = FALSE, color = guide_legend(title = "Example")) +
+  xlab('Nudge') + 
+  ylab('Difference score (Conservative - Liberal)') +
+  ylim(-6, 6) +
+  visualisationTheme
+
+ggsave("examplePlotUK.png", examplePlotUK, device = "png", dpi = 100, width = 70, height = 30, limitsize = FALSE) 
+```

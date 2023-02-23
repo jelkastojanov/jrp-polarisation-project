@@ -1,37 +1,45 @@
 ---
-title: "JRP Pilot 1 (UK data)"
-author: "Jelka Stojanov"
-date: "10/02/2022"
+title: "Pilot 1 (Political issues) - Cleaning & analysis code"
 output: html_document
+date: '2023-02-23'
 ---
 
 Load packages
 
 ```{r}
-library(interactions)
 library(afex)
-library(tidyverse) 
-library(dplyr)
-library(readxl)
-library(ggplot2)
-library(lme4) 
-library(lmerTest)
-library(readr)
-library(maditr)
-library(patchwork)
-library(janitor)
-library(openxlsx)
-library(Routliers)
-library(lsmeans)
-library(Hmisc)
+library(bootnet)
 library(car)
-library(MPsychoR)
+library(dplyr)
 library(eigenmodel)
-library(rmcorr)
+library(ggplot2)
+library(glasso)
+library(Hmisc)
+library(interactions)
+library(janitor)
+library(lmerTest)
+library(lme4) 
+library(lsmeans)
+library(maditr)
+library(MPsychoR)
+library(NetworkComparisonTest)
+library(networktools)
+library(openxlsx)
+library(patchwork)
 library(ppcor)
+library(qgraph)
+library(readr)
+library(readxl)
+library(rmcorr)
+library(Routliers)
+library(simr)
+library(tidyverse) 
 
-options(scipen = 999) # Remove scientific notation
-`%notin%` <- Negate(`%in%`) # Define %notin% function
+# Remove scientific notation
+options(scipen = 999) 
+
+# Define %notin% function
+`%notin%` <- Negate(`%in%`) 
 ```
 
 ################## UK ##################
@@ -120,9 +128,6 @@ pilot1Data <- left_join(pilot1Data, additionalGoals, by = "participantID")
 pilot1Data <- left_join(pilot1Data, politicalParty, by = "participantID")
 pilot1Data <- left_join(pilot1Data, politicalIdeologyFinal, by = "participantID")
 pilot1Data <- left_join(pilot1Data, technicalDifficulties, by = "participantID")
-
-# Export data into a .csv file
-write.csv(pilot1Data, 'pilot1Data.csv')
 ```
 
 #########
@@ -132,7 +137,6 @@ DATA ANALYSIS
 ########
 
 TASK 1: All 7 of us should go through the policy goals included in Pilot 1 (SLO/UK) and categorise them as economic/social in different pages of the Excel sheet.
-
 
 TASK 2 (Analysis steps):
 
@@ -487,9 +491,6 @@ pilot1DataSlo <- left_join(pilot1DataSlo, politicalPartySlo, by = "participantID
 pilot1DataSlo <- left_join(pilot1DataSlo, politicalIdeologyFinalSlo, by = "participantID")
 pilot1DataSlo <- left_join(pilot1DataSlo, liberarianismSlo, by = "participantID")
 pilot1DataSlo <- left_join(pilot1DataSlo, technicalDifficultiesSlo, by = "participantID")
-
-# Export data into a .csv file
-write.csv(pilot1DataSlo, 'pilot1DataSlo.csv')
 ```
 
 #########
