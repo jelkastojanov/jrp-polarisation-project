@@ -1,0 +1,636 @@
+---
+output: html_document
+---
+
+##### Load packages & specify visualisation theme
+
+```{r}
+# Load packages
+library(car)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(gvlma)
+library(huxtable)
+library(interactions)
+library(jtools)
+library(lme4)
+library(lmerTest)
+library(lmtest)
+library(lsmeans)
+library(lsr)
+library(maditr)
+library(MASS)
+library(openxlsx)
+library(patchwork)
+library(performance)
+library(pscl)
+library(readr)
+library(readxl)
+library(regclass)
+library(relaimpo)
+library(rlang)
+library(stargazer)
+library(stats)
+library(tidyverse) 
+
+# Remove scientific notation
+options(scipen = 999) 
+
+# Define frequently used functions
+`%notin%` <- Negate(`%in%`) 
+
+# Specify visualisation theme
+visualisationTheme <- theme( 
+  axis.line.y = element_line(colour = "gray40", size = 0.5, lineend = 0),
+  axis.line.x = element_line(colour = "gray40", size = 0.5, lineend = 0),
+  axis.ticks.x = element_line(colour = "gray40", size = 0.5, lineend = 0),
+  strip.text.x = element_text(size = 16,  colour = "black"),
+  strip.text.y = element_text(size = 16,  colour = "black"),
+  axis.text.x = element_text(size = 10, family = "sans", colour = "black"), 
+  axis.text.y = element_text(size = 10, family = "sans", colour = "black"),
+  axis.title.y = element_text(size = 16, margin = ggplot2::margin(0, 5, 0, 0)),
+  axis.title.x = element_text(size = 16, margin = ggplot2::margin(5, 0, 0, 0)),
+  panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_rect(fill = "transparent"),
+  legend.position = "top",
+  legend.title = element_text(size = 16, family = "sans", colour = "black"),
+  legend.text = element_text(size = 16, family = "sans", colour = "black"),
+  legend.background = element_blank(),
+  text = element_text(size = 16, family = "sans"),
+  plot.title = element_text(size = 20,  colour = "black", hjust = .5),
+  strip.background = element_blank())
+
+# Load data [Note: Specify the path correctly!]
+dataStudy1UK <- read.csv("dataStudy1UK.csv")
+dataStudy1UKTask <- read.csv("dataStudy1UKTask.csv")
+```
+
+##### Data cleaning
+
+Note: Do not forget to complete data cleaning steps on **both datasets**.
+
+```{r}
+# Save cleaned datasets under new names in case you make a mistake
+dataStudy1UKClean <- dataStudy1UK
+dataStudy1UKTaskClean <- dataStudy1UKTask
+
+# Recode libertarianism items (Q2, Q5, Q6)
+# Higher scores should indicate higher libertarianism (i.e., stronger opposition to government interference)
+dataStudy1UKClean$libertarianismQ2_rec <-
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 1, 7,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 2, 6,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 3, 5,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 4, 4,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 5, 3,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 6, 2,
+  ifelse(dataStudy1UKClean$libertarianismQ2 == 7, 1, NA)))))))
+
+dataStudy1UKClean$libertarianismQ5_rec <-
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 1, 7,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 2, 6,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 3, 5,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 4, 4,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 5, 3,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 6, 2,
+  ifelse(dataStudy1UKClean$libertarianismQ5 == 7, 1, NA)))))))
+
+dataStudy1UKClean$libertarianismQ6_rec <-
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 1, 7,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 2, 6,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 3, 5,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 4, 4,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 5, 3,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 6, 2,
+  ifelse(dataStudy1UKClean$libertarianismQ6 == 7, 1, NA)))))))
+
+dataStudy1UKTaskClean$libertarianismQ2_rec <-
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 1, 7,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 2, 6,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 3, 5,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 4, 4,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 5, 3,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 6, 2,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ2 == 7, 1, NA)))))))
+
+dataStudy1UKTaskClean$libertarianismQ5_rec <-
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 1, 7,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 2, 6,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 3, 5,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 4, 4,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 5, 3,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 6, 2,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ5 == 7, 1, NA)))))))
+
+dataStudy1UKTaskClean$libertarianismQ6_rec <-
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 1, 7,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 2, 6,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 3, 5,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 4, 4,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 5, 3,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 6, 2,
+  ifelse(dataStudy1UKTaskClean$libertarianismQ6 == 7, 1, NA)))))))
+
+# Calculate Cronbach's alpha 
+libertarianismScale <- dplyr::select(dataStudy1UKClean, c("libertarianismQ1", "libertarianismQ2_rec", "libertarianismQ3",
+                                                     "libertarianismQ4", "libertarianismQ5_rec", "libertarianismQ6_rec"))
+# Alpha: 0.80
+cronbach.alpha(libertarianismScale) 
+
+# Create the combined score
+dataStudy1UKClean$libertarianismScore <- 
+  (dataStudy1UKClean$libertarianismQ1 + dataStudy1UKClean$libertarianismQ2_rec + dataStudy1UKClean$libertarianismQ3 +
+   dataStudy1UKClean$libertarianismQ4 + dataStudy1UKClean$libertarianismQ5_rec + dataStudy1UKClean$libertarianismQ6_rec) / 6
+
+dataStudy1UKTaskClean$libertarianismScore <- 
+  (dataStudy1UKTaskClean$libertarianismQ1 + dataStudy1UKTaskClean$libertarianismQ2_rec + 
+   dataStudy1UKTaskClean$libertarianismQ3 + dataStudy1UKTaskClean$libertarianismQ4 + 
+   dataStudy1UKTaskClean$libertarianismQ5_rec + dataStudy1UKTaskClean$libertarianismQ6_rec) / 6
+
+# Sanity checks
+head(dataStudy1UKClean)
+tail(dataStudy1UKClean)
+
+# Might be interesting to rerun these basic plots when political affiliation variables are created
+dataStudy1UKClean %>%
+  ggplot(aes(x = firstOrderConservativeVoters)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = firstOrderLiberalVoters)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = abortionPromptsOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = borderForceOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = policePowerOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = armyReserveOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = sexEducationOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = tradeUnionsOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = transgenderPromptsOpinion)) +
+  geom_histogram()
+
+dataStudy1UKClean %>%
+  ggplot(aes(x = underrepresentedHiringOpinion)) +
+  geom_histogram()
+
+# Examine basic demographics
+table(dataStudy1UKClean$gender)
+table(dataStudy1UKClean$UKnationality) # One participant is from NI, but they reside in GB [This meets eligibility criteria we specified in the participant information sheet, so this participant shouldn't be excluded]
+```
+
+##### Create new variables
+
+```{r}
+# Self-report
+dataStudy1UKClean$economicViews.quantified <- 
+  ifelse(dataStudy1UKClean$economicViews== "Very liberal", 7,
+       ifelse(dataStudy1UKClean$economicViews== "Liberal", 6,
+              ifelse(dataStudy1UKClean$economicViews== "Somewhat liberal", 5,
+                     ifelse(dataStudy1UKClean$economicViews== "Moderate", 4,
+                            ifelse(dataStudy1UKClean$economicViews== "Somewhat conservative", 3,
+                                   ifelse(dataStudy1UKClean$economicViews== "Conservative", 2, 1))))))
+
+dataStudy1UKClean$socialViews.quantified <- 
+  ifelse(dataStudy1UKClean$socialViews== "Very liberal", 7,
+       ifelse(dataStudy1UKClean$socialViews== "Liberal", 6,
+              ifelse(dataStudy1UKClean$socialViews== "Somewhat liberal", 5,
+                     ifelse(dataStudy1UKClean$socialViews== "Moderate", 4,
+                            ifelse(dataStudy1UKClean$socialViews== "Somewhat conservative", 3,
+                                   ifelse(dataStudy1UKClean$socialViews== "Conservative", 2, 1))))))
+
+# Task 
+dataStudy1UKTaskClean$economicViews.quantified <- 
+  ifelse(dataStudy1UKTaskClean$economicViews== "Very liberal", 7,
+       ifelse(dataStudy1UKTaskClean$economicViews== "Liberal", 6,
+              ifelse(dataStudy1UKTaskClean$economicViews== "Somewhat liberal", 5,
+                     ifelse(dataStudy1UKTaskClean$economicViews== "Moderate", 4,
+                            ifelse(dataStudy1UKTaskClean$economicViews== "Somewhat conservative", 3,
+                                   ifelse(dataStudy1UKTaskClean$economicViews== "Conservative", 2, 1))))))
+
+dataStudy1UKTaskClean$socialViews.quantified <- 
+  ifelse(dataStudy1UKTaskClean$socialViews== "Very liberal", 7,
+       ifelse(dataStudy1UKTaskClean$socialViews== "Liberal", 6,
+              ifelse(dataStudy1UKTaskClean$socialViews== "Somewhat liberal", 5,
+                     ifelse(dataStudy1UKTaskClean$socialViews== "Moderate", 4,
+                            ifelse(dataStudy1UKTaskClean$socialViews== "Somewhat conservative", 3,
+                                   ifelse(dataStudy1UKTaskClean$socialViews== "Conservative", 2, 1))))))
+
+
+# Averaged political affiliation
+dataStudy1UKClean$avgEcoSocViews <- rowMeans(dataStudy1UKClean[, c("socialViews.quantified", "economicViews.quantified")])
+dataStudy1UKTaskClean$avgEcoSocViews <- rowMeans(dataStudy1UKTaskClean[, 
+                                                 c("socialViews.quantified", "economicViews.quantified")])
+
+# Categorical political ideology
+dataStudy1UKClean$politicalAffiliationCategory <- 
+  ifelse(dataStudy1UKClean$avgEcoSocViews > 4, "Liberal",
+  ifelse(dataStudy1UKClean$avgEcoSocViews == 4, "Moderate", "Conservative"))
+
+dataStudy1UKTaskClean$politicalAffiliationCategory <- 
+  ifelse(dataStudy1UKTaskClean$avgEcoSocViews > 4, "Liberal",
+  ifelse(dataStudy1UKTaskClean$avgEcoSocViews == 4, "Moderate", "Conservative"))
+
+# Delete participants who failed attention checks
+dataStudy1UKCleanIncluded <- dataStudy1UKClean %>%
+  filter(participantStatus == "Include")
+
+dataStudy1UKTaskCleanIncluded <- dataStudy1UKTaskClean %>%
+  filter(participantStatus == "Include")
+
+# Check whether the variable trialNumber is going from 1 to 4 for each participant and whether it is separating different stimuli in the task as planned 
+
+# Sample data frame
+dataStudy1UKTaskCleanIncluded <- dataStudy1UKTaskClean %>%
+  filter(participantStatus == "Include")
+
+df <- data.frame(variable = dataStudy1UKTaskCleanIncluded$trialNumber)
+
+# Desired sequence
+desiredSequence <- c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4)
+
+# Check if variable follows the desired sequence pattern
+df$testSequence <- as.integer(desiredSequence[(seq_len(nrow(df)) - 1) %% length(desiredSequence) + 1])
+identical(df$variable, df$testSequence)
+
+# Check demographics again now that the dataset does not include participants who failed attention checks
+# 208 conservative, 245 liberal, 81 moderate participants
+table(dataStudy1UKCleanIncluded$politicalAffiliationCategory)
+table(dataStudy1UKCleanIncluded$gender)
+table(dataStudy1UKCleanIncluded$UKnationality)
+
+# ZMIGROD ET AL. (2018) APPROACH - TO DO
+
+# Create the visualisations split  by political affiliation
+
+# Prejudice (Conservative voters)
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = firstOrderConservativeVoters, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = firstOrderConservativeVoters), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = firstOrderConservativeVoters, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Prejudice (Conservative voters)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Prejudice (Liberal voters)
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = firstOrderLiberalVoters, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = firstOrderLiberalVoters), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = firstOrderLiberalVoters, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Prejudice (Liberal voters)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Abortion
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = abortionPromptsOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = abortionPromptsOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = abortionPromptsOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Negative consequences of abortion') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Border force
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = borderForceOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = borderForceOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = borderForceOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  ylab('Border force') + 
+  xlab('Political affiliation') + 
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Police power
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = policePowerOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = policePowerOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = policePowerOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Police power') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Army reserve
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = armyReserveOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = armyReserveOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = armyReserveOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Army reserve') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# LGBTQ sex education
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = sexEducationOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = sexEducationOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = sexEducationOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('LGBTQ sex education') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Trade unions
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = tradeUnionsOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = tradeUnionsOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = tradeUnionsOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Trade unions') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Trans
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = transgenderPromptsOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = transgenderPromptsOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = transgenderPromptsOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Transgender medical care') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+
+# Hiring employees from underrepresented backgrounds
+dataStudy1UKCleanIncluded %>%
+  ggplot(aes(y = underrepresentedHiringOpinion, x = politicalAffiliationCategory, colour = politicalAffiliationCategory)) +
+  geom_point(aes(y = underrepresentedHiringOpinion), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 2, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 4, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  stat_summary(aes(y = underrepresentedHiringOpinion, 
+                   group = politicalAffiliationCategory), fun.y = mean, geom = "line", size = 4, alpha = 1.5, 
+               width = 0.25, colour = 'gray48', mult = 1) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Political affiliation') + 
+  ylab('Underrepresented hiring') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.position = "none")
+```
+
+##### Task analyses
+
+```{r}
+# List to save models in
+modelsTaskList <- list()
+
+# In each model, we should control for libertarianism
+# Standardise libertarianism score
+dataStudy1UKTaskCleanIncluded$libertarianismScore_z <- scale(dataStudy1UKTaskCleanIncluded$libertarianismScore)
+
+# Note: Random structure was included after its separate selection below.
+
+##### FULL MODELS #####
+
+# REFRAMING
+modelsTaskList$reframingModel <-
+lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
+    (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Reframing"))
+
+summary(modelsTaskList$reframingModel)
+anova(modelsTaskList$reframingModel)
+
+# Main effect of condition
+# Interesting trend that combined stimuli were followed by more support across the responses than control, liberal and conservative stimuli
+lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE)) 
+
+# Main effect of response level
+lsmeans(modelsTaskList$reframingModel, pairwise ~ responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE)) 
+# Main effect of libertarianism
+# The lower you are on libertarianism, the higher your actual and predicted support is
+lsmeans(modelsTaskList$reframingModel, pairwise ~ libertarianismScore_z, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
+# Condition x Affiliation interaction
+lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory | politicalAffiliationCategory, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
+# NORMS
+modelsTaskList$normsModel <-
+lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
+    (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Norms"))
+
+summary(modelsTaskList$normsModel)
+anova(modelsTaskList$normsModel)
+
+# PROMPTS
+modelsTaskList$promptsModel <-
+lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
+    (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Prompts"))
+
+summary(modelsTaskList$promptsModel)
+anova(modelsTaskList$promptsModel)
+
+# DEFAULTS
+modelsTaskList$defaultsModel <-
+lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
+    (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Defaults"))
+
+summary(modelsTaskList$defaultsModel)
+anova(modelsTaskList$defaultsModel)
+
+# COMBINED
+
+# Converged normally without errors
+# The four-way interaction is significant which warrants looking at each nudge separately
+modelsTaskList$combinedModelIntercept <-
+lmer(nudgeResponse ~ nudgeExampleCategory * nudge * politicalAffiliationCategory * responseLevel + libertarianismScore_z + 
+    (1|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+summary(modelsTaskList$combinedModelIntercept)
+anova(modelsTaskList$combinedModelIntercept)
+
+# Singular, failed to converge when fixed effects are added
+# Even when this output is printed, the four-way interaction is significant, so we are good to fit separate models
+modelsTaskList$combinedModelInterceptUncorSlope <-
+lmer(nudgeResponse ~ nudgeExampleCategory * nudge * politicalAffiliationCategory * responseLevel + libertarianismScore_z + 
+    (0 + nudge|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+summary(modelsTaskList$combinedModelInterceptUncorSlope)
+anova(modelsTaskList$combinedModelInterceptUncorSlope)
+
+##### RANDOM STRUCTURE SELECTION #####
+
+# REFRAMING [Only intercepts for participants]
+
+# Random intercepts for participants
+modelsTaskList$randomFirstReframing <-
+  lmer(nudgeResponse ~ (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Reframing"))
+
+# Random slopes with correlated intercepts [Unidentifiable]
+modelsTaskList$randomSecondReframing <-
+  lmer(nudgeResponse ~ (1 + responseLevel|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Reframing"))
+
+# Random slopes with uncorrelated intercepts [Unidentifiable]
+modelsTaskList$randomThirdReframing <-
+  lmer(nudgeResponse ~ (0 + responseLevel|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Reframing"))
+
+# NORMS
+
+# Random intercepts for participants
+modelsTaskList$randomFirstNorms <-
+  lmer(nudgeResponse ~ (1|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Norms"))
+
+# Random slopes with correlated intercepts [Unidentifiable]
+modelsTaskList$randomSecondNorms <-
+  lmer(nudgeResponse ~ (1 + responseLevel|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Norms"))
+
+# Random slopes with uncorrelated intercepts [Unidentifiable]
+modelsTaskList$randomThirdNorms <-
+  lmer(nudgeResponse ~ (0 + responseLevel|participantID),
+	data = subset(dataStudy1UKTaskCleanIncluded, dataStudy1UKTaskCleanIncluded$nudge == "Norms"))
+
+# I am not going to run the other nudge-specific random models below, the slope models will always be unidentifiable because we have the same number of observations per nudge.
+
+# COMBINED
+
+# Random intercepts for participants
+modelsTaskList$randomFirstCombined <- 
+  lmer(nudgeResponse ~ (1|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+# Random slopes (response level) with correlated intercepts [Singular]
+modelsTaskList$randomSecondCombined <-
+  lmer(nudgeResponse ~ (1 + responseLevel|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+# Random slopes (response level) with uncorrelated intercepts [Singular]
+modelsTaskList$randomThirdCombined  <-
+  lmer(nudgeResponse ~ (0 + responseLevel|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+# Random slopes (nudge) with correlated intercepts [Singular, failed to converge]
+modelsTaskList$randomFourthCombined <-
+  lmer(nudgeResponse ~ (1 + nudge|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+# Random slopes (response level) with uncorrelated intercepts 
+modelsTaskList$randomFifthCombined  <-
+  lmer(nudgeResponse ~ (0 + nudge|participantID),
+	data = dataStudy1UKTaskCleanIncluded)
+
+# AIC and BIC do not agree here
+# Combined model should be run with both random structures and if the four-way interaction is significant in both models, we are fit separate models for each nudge
+anova(modelsTaskList$randomFirstCombined, modelsTaskList$randomFifthCombined)
+```
+
+TO DO:
+
+- Compute political affiliation scores based on political party support
+- Interpret the current results in the context of informative visualisations [Follow each effect of interest with a visualisation]
+- Check if the results remain the same with different "treatments" of political affiliation. Here, all analyses use political affiliation category (Conservative, Moderate, Liberal), but in the pre-registration, we said that we were going to use the continuous measure too (avgEcoSocViews) and the measure derived from political party support.
