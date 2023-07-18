@@ -497,18 +497,26 @@ lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * respo
 summary(modelsTaskList$reframingModel)
 anova(modelsTaskList$reframingModel)
 
+# Summary: Main effect of condition (F = 3.02, p = .029); Main effect of response level (F = 5.62, p = .004); Main effect of libertarianism (F = 21.98, p < .001); Condition x Political affiliation interaction (F = 2.54, p = .020)
+
 # Main effect of condition
-# Interesting trend that combined stimuli were followed by more support across the responses than control, liberal and conservative stimuli
+# Interesting *trend* that combined stimuli were followed by more support across the responses than control, liberal and conservative stimuli
 lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE)) 
 
 # Main effect of response level
+# People thought conservative voters will approve more of reframing that they approved of reframing themselves
 lsmeans(modelsTaskList$reframingModel, pairwise ~ responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE)) 
 # Main effect of libertarianism
 # The lower you are on libertarianism, the higher your actual and predicted support is
 lsmeans(modelsTaskList$reframingModel, pairwise ~ libertarianismScore_z, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
 
 # Condition x Affiliation interaction
-lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory | politicalAffiliationCategory, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+# No significant pairwise comparisons
+lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory | politicalAffiliationCategory, cov.reduce = range, adjust = 'holm', infer = c(TRUE, TRUE))
+
+# Trending only
+# Condition x Response level
+lsmeans(modelsTaskList$reframingModel, pairwise ~ nudgeExampleCategory | responseLevel, cov.reduce = range, adjust = 'holm', infer = c(TRUE, TRUE))
 
 # NORMS
 modelsTaskList$normsModel <-
@@ -519,6 +527,14 @@ lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * respo
 summary(modelsTaskList$normsModel)
 anova(modelsTaskList$normsModel)
 
+# Summary: Main effect of response level (F = 3.42, p = .033); Main effect of libertarianism (F = 16.52, p < .001); Condition x Response level interaction (F = 5.13, p < .001); Political affiliation x Response level (F = 2.42, p = .047); Condition x Political affiliation x Response level (F = 1.86, p = .035)
+
+# Condition x Response level
+lsmeans(modelsTaskList$normsModel, pairwise ~ nudgeExampleCategory | responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
+# Condition x Political affiliation x Response level [This needs a plot!]
+lsmeans(modelsTaskList$normsModel, pairwise ~ nudgeExampleCategory | politicalAffiliationCategory | responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
 # PROMPTS
 modelsTaskList$promptsModel <-
 lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
@@ -528,6 +544,14 @@ lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * respo
 summary(modelsTaskList$promptsModel)
 anova(modelsTaskList$promptsModel)
 
+# Summary: Main effect of condition (F = 3.66, p = .012); Main effect of political affiliation (F = 3.59, p = .028); Main effect of response level (F = 4.04, p = .018); Main effect of libertarianism (F = 9.23, p = .002); Condition x Response level interaction (F = 4.78, p < .001); Condition x Political affiliation x Response level (F = 2.34, p = .006)
+
+# Condition x Response level
+lsmeans(modelsTaskList$promptsModel, pairwise ~ nudgeExampleCategory | responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
+# Condition x Political affiliation x Response level [This needs a plot!]
+lsmeans(modelsTaskList$promptsModel, pairwise ~ nudgeExampleCategory | politicalAffiliationCategory | responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
 # DEFAULTS
 modelsTaskList$defaultsModel <-
 lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * responseLevel + libertarianismScore_z +
@@ -536,6 +560,13 @@ lmer(nudgeResponse ~ nudgeExampleCategory * politicalAffiliationCategory * respo
 
 summary(modelsTaskList$defaultsModel)
 anova(modelsTaskList$defaultsModel)
+
+# Summary: Main effect of libertarianism (F = 9.78, p = .002); Condition x Response level interaction (F = 17.62, p < .001); Political affiliation x Response level (F = 2.71, p = .029) Condition x Political affiliation x Response level (F = 2.08, p = .016)
+
+# Condition x Response level
+lsmeans(modelsTaskList$defaultsModel, pairwise ~ nudgeExampleCategory | responseLevel, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
+
+lsmeans(modelsTaskList$defaultsModel, pairwise ~ nudgeExampleCategory | responseLevel | politicalAffiliationCategory, cov.reduce = range, adjust = 'holm', , infer = c(TRUE, TRUE))
 
 # COMBINED
 
@@ -619,14 +650,262 @@ modelsTaskList$randomFourthCombined <-
   lmer(nudgeResponse ~ (1 + nudge|participantID),
 	data = dataStudy1UKTaskCleanIncluded)
 
-# Random slopes (response level) with uncorrelated intercepts 
+# Random slopes (nudge) with uncorrelated intercepts 
 modelsTaskList$randomFifthCombined  <-
   lmer(nudgeResponse ~ (0 + nudge|participantID),
 	data = dataStudy1UKTaskCleanIncluded)
 
 # AIC and BIC do not agree here
-# Combined model should be run with both random structures and if the four-way interaction is significant in both models, we are fit separate models for each nudge
+# Combined model should be run with both random structures and if the four-way interaction is significant in both models, we can fit separate models for each nudge
 anova(modelsTaskList$randomFirstCombined, modelsTaskList$randomFifthCombined)
+```
+
+##### Visualisations for each nudge
+
+```{r}
+dataStudy1UKTaskCleanIncluded$responseLevelVisualisation <-
+  if_else(dataStudy1UKTaskCleanIncluded$responseLevel == "selfOpinion", "Self", 
+  if_else(dataStudy1UKTaskCleanIncluded$responseLevel == "conservativeOpinion", "Predicted (Conservative)", 
+          "Predicted (Liberal)"))
+# REFRAMING
+# Summary of results: Main effect of condition (F = 3.02, p = .029); Main effect of response level (F = 5.62, p = .004); Main effect of libertarianism (F = 21.98, p < .001); Condition x Political affiliation (F = 2.54, p = .020); Condition x Response level (F = 2.16, p = .051)
+
+# Condition x Response level
+plotReframingTwoWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Reframing") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.title = element_blank())
+
+ggsave('plotReframingTwoWay.tiff', plotReframingTwoWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE)
+
+# NORMS
+# Summary of results: Main effect of response level (F = 3.42, p = .033); Main effect of libertarianism (F = 16.52, p < .001); Condition x Response level (F = 5.13, p < .001); Political affiliation x Response level (F = 2.42, p = .047); Condition x Political affiliation x Response level (F = 1.86, p = .035)
+
+# Condition x Political affiliation x Response level
+plotNormsThreeWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Norms") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  facet_grid(~politicalAffiliationCategory) +
+  theme(legend.title = element_blank())
+  
+ggsave('plotNormsThreeWay.tiff', plotNormsThreeWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE) 
+
+# Condition x Response level
+plotNormsTwoWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Norms") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.title = element_blank())
+
+ggsave('plotNormsTwoWay.tiff', plotNormsTwoWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE)
+
+# PROMPTS
+# Summary of results: Main effect of condition (F = 3.66, p = .012); Main effect of political affiliation (F = 3.59, p = .028); Main effect of response level (F = 4.04, p = .018); Main effect of libertarianism (F = 9.23, p = .002); Condition x Response level (F = 4.78, p < .001); Condition x Political affiliation x Response level (F = 2.34, p = .006)
+
+# Condition x Political affiliation x Response level
+plotPromptsThreeWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Prompts") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  facet_grid(~politicalAffiliationCategory) +
+  theme(legend.title = element_blank())
+  
+ggsave('plotPromptsThreeWay.tiff', plotPromptsThreeWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE) 
+
+# Condition x Response level
+plotPromptsTwoWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Prompts") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.title = element_blank())
+
+ggsave('plotPromptsTwoWay.tiff', plotPromptsTwoWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE) 
+
+# DEFAULTS
+# Summary of results: Main effect of libertarianism (F = 9.78, p = .002); Condition x Response level (F = 17.62, p < .001); Political affiliation x Response level (F = 2.71, p = .029) Condition x Political affiliation x Response level (F = 2.08, p = .016)
+
+# Condition x Political affiliation x Response level
+plotDefaultsThreeWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Defaults") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  facet_grid(~politicalAffiliationCategory) +
+  theme(legend.title = element_blank())
+  
+ggsave('plotDefaultsThreeWay.tiff', plotDefaultsThreeWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE) 
+
+# Condition x Response level
+plotDefaultsTwoWay <- dataStudy1UKTaskCleanIncluded %>%
+  filter(nudge == "Defaults") %>%
+  ggplot(aes(x = responseLevelVisualisation, y = nudgeResponse, color = nudgeExampleCategory, fill = nudgeExampleCategory)) +
+    geom_point(aes(y = nudgeResponse), position = position_dodge2(width = .15), size = 3, alpha = 0.05) +
+  stat_summary(fun = mean, geom = 'pointrange', width = 0.2, size = 1.5, alpha = 1.5,
+               position = position_dodge(width = 0.3)) +
+  stat_summary(fun.data = mean_se, geom = 'errorbar', width = 0.25, size = 3, alpha = 1.5, linetype = "solid",
+               position = position_dodge(width = 0.3)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  xlab('Response level') + 
+  ylab('Approval (Actual vs predicted)') +
+  ylim(1, 7) +
+  visualisationTheme +
+  theme(legend.title = element_blank())
+
+ggsave('plotDefaultsTwoWay.tiff', plotDefaultsTwoWay, device = 'tiff', dpi = 100, width = 20, height = 10, limitsize = FALSE) 
+```
+
+##### ESS [In progress]
+
+```{r}
+ESS <- read.csv("ESS10.csv")
+
+# Keep only participants' ID and the two variables of interest
+ESSShort <- dplyr::select(ESS, c("idno", "lrscale", "prtcldgb"))
+
+# There are duplicate IDs
+unqIDs <- unique(ESSShort$idno)
+length(unqIDs)
+
+ESSShort$duplicatedID <- duplicated(ESSShort$idno)
+table(ESSShort$duplicatedID)
+ESSShort <- ESSShort %>% arrange(idno)
+
+# See if there are duplicate IDs among full data
+ESSShortClean <- ESSShort %>%
+  filter(is.na(lrscale) == FALSE & is.na(prtcldgb) == FALSE)
+
+# 1149 unique participants 
+# TO DO: How many participants are there in the ESS sample?
+unique(ESSShortClean$duplicatedID) 
+
+# Recode numbers to political parties
+replacement_dict <- c("1" = "Conservative",
+                      "2" = "Labour",
+                      "3" = "Liberal Democrat",
+                      "4" = "Scottish National Party",
+                      "5" = "Plaid Cymru",
+                      "6" = "Green Party",
+                      "7" = "UK Independence Party",
+                      "8" = "Brexit Party",
+                      "9" = "Other",
+                      "10" = "Ulster Unionist Party (nir)",
+                      "11" = "Democratic Unionist Party (nir)",
+                      "12" = "Sinn Féin (nir)",
+                      "13" = "Social Democratic and Labour Party (nir)",
+                      "14" = "Alliance Party (nir)",
+                      "15" = "Traditional Unionist (nir)",
+                      "16" = "Green Party (nir)",
+                      "17" = "Independent(s) (nir)",
+                      "18" = "People Before Profit Alliance (nir)",
+                      "19" = "Progressive Unionist Party",
+                      "20" = "Aontú (nir)",
+                      "21" = "Northern Ireland Conservatives (nir)",
+                      "22" = "Other (nir)",
+                      "66" = "Not applicable*",
+                      "77" = "Refusal*",
+                      "88" = "Don't know*",
+                      "99" = "No answer*")
+
+ESSShortClean$politicalPartySupport <- replacement_dict[as.character(ESSShortClean$prtcldgb)]
+
+# Exclude participants who didn't provide political ideology
+ESSShortClean$participantStatus <- 
+  if_else(ESSShortClean$lrscale %in% c(77, 88, 99), "Exclude", "Include")
+
+# 74 excluded participants [1075 included]
+table(ESSShortClean$participantStatus) 
+
+# 525 participants said "not applicable"
+ESSShortClean %>%
+  filter(participantStatus == "Include") %>%
+  group_by(politicalPartySupport) %>%
+  summarise(meanLR = mean(lrscale), n = n())
+
+# What are the political parties we have in the sample?
+dataStudy1UKCleanIncluded <- dataStudy1UKClean %>% filter(participantStatus == "Include")
+table(dataStudy1UKCleanIncluded$politicalPartySupport)
+
+# Clean the response of those 9 participants who responded with "Other"
+dataStudy1UKCleanIncluded %>%
+  filter(politicalPartySupport == "Other (Please specify)")
+
+dataStudy1UKCleanIncluded$politicalPartySupportRecoded <-
+  if_else(dataStudy1UKCleanIncluded$participantID == "6413d30c1335a1a6b3b91b67", "Scottish Green Party",
+  if_else(dataStudy1UKCleanIncluded$participantID == "5c4074b625379500019a8ca5", "Libertarian Party", 
+  if_else(dataStudy1UKCleanIncluded$participantID == "6128affc7322ddbb3e16dcb3", "Alba Party", 
+  if_else(dataStudy1UKCleanIncluded$participantID %in% c("5bf8a27021a4e1000194fc76", "5f3dc6a9e5391b1d7eea62f8"), "Labour",
+  if_else(dataStudy1UKCleanIncluded$participantID %in% c("5bedb3c2e3368e0001e0225c", "5ed12660a41e2603213e1f87", 
+                                                         "59e7276d5de9b000017ed1c1", "5e39dfdc54fca708912dfab5"), "None", 
+          dataStudy1UKCleanIncluded$politicalPartySupport)))))
+
+# Sanity check
+dataStudy1UKCleanIncluded %>%
+  dplyr::select(c("politicalPartySupport", "politicalPartySupport.text", "politicalPartySupportRecoded")) %>%
+  filter(politicalPartySupport == "Other (Please specify)")
+
+# TO DO: Assign scores 
 ```
 
 TO DO:
